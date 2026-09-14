@@ -1,7 +1,10 @@
 /*
- * ⚡ Stroom — the web page. Fetches, keeps a local copy, draws.
- * Every price rule lives in shared/ (StroomCore, StroomText, StroomFeeds),
- * the same code the calendar uses — never add price logic here.
+ * ⚡ Stroom — the web page. Answers three questions at a glance:
+ * is electricity cheap now, when is it cheap (or expensive) next, and tomorrow?
+ *
+ * Fetches, keeps a local copy, draws. Every price rule lives in shared/
+ * (StroomCore, StroomText, StroomFeeds), the same code the calendar uses —
+ * never add price logic here.
  */
 (function () {
   'use strict';
@@ -21,7 +24,13 @@
     normal: ['⚪', 'Normaal', 'Normal'],
     expensive: ['🔴', 'Duur', 'Expensive'],
   };
-  const ADVICE = { free: 'run everything you can', cheap: 'good time to run', expensive: 'wait if you can', normal: '' };
+
+  const VERDICT = {
+    free: { word: 'FREE', advice: 'Run everything you can' },
+    cheap: { word: 'CHEAP', advice: 'Good time to run things' },
+    normal: { word: 'NORMAL', advice: 'Not cheap, not expensive' },
+    expensive: { word: 'EXPENSIVE', advice: 'Wait if you can' },
+  };
 
   const state = {
     rows: {},        // date → [{startMs, spotExVat}] — raw prices, so a tariff change applies to saved days too
@@ -30,8 +39,6 @@
     problems: {},    // date → 'unpublished' | 'offline'
     checkedAt: null,
     loading: true,
-    selected: {},    // date → hour index picked in the chart
-    tableOpen: {},
   };
 
   // ---- Local copy — a convenience; the page works without it ---------------
@@ -101,7 +108,7 @@
       wanted.forEach((date, i) => {
         const result = results[i];
         if (result.day) {
-          const rows = result.day.hours.map((h) => ({ startMs: h.startMs, spotExVat: h.spot }));
+          const rows = result.day.hours.map((x) => ({ startMs: x.startMs, spotExVat: x.spot }));
           state.rows[date] = rows;
           state.sources[date] = result.source;
           state.savedAt[date] = Date.now();
@@ -146,6 +153,7 @@
 
   const byId = (id) => document.getElementById(id);
   const nl = (text) => h('span', { lang: 'nl' }, text);
+  const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
   function clock(ms) {
     const lp = C.localParts(ms);
@@ -158,215 +166,140 @@
     return T.dayLabel(date);
   }
 
-  function tierLabel(tier) {
-    const n = NAMES[tier];
-    return [n[0] + ' ', nl(n[1]), ' · ' + n[2]];
+  // "16:00", "16:00 tomorrow", "midnight"
+  function at(ms, d) {
+    const lp = C.localParts(ms);
+    if (lp.hour === 0 && lp.minute === 0) return lp.date === d.tomorrow ? 'midnight' : 'midnight tomorrow';
+    const time = C.pad(lp.hour) + ':' + C.pad(lp.minute);
+    return lp.date === d.today ? time : time + ' ' + relDay(lp.date, d);
   }
 
-  // ---- Now -----------------------------------------------------------------
+  // End of the unbroken run of hours sharing the current hour's tier.
+  function stretchEnd(hours, current) {
+    let j = hours.indexOf(current);
+    while (j + 1 < hours.length && hours[j + 1].tier === current.tier && hours[j + 1].startMs === hours[j].endMs) j++;
+    return { endMs: hours[j].endMs, known: j + 1 < hours.length };
+  }
 
-  function renderNow(o, d) {
-    const box = byId('now');
+  // ---- Verdict -------------------------------------------------------------
+
+  function renderHero(o, hours, d) {
+    const box = byId('hero');
     box.replaceChildren();
-    const eyebrow = (extra) => h('p', { class: 'eyebrow' }, nl('Nu'), ' · Now' + (extra || ''));
-
     if (!o || !o.current) {
-      box.append(eyebrow(), h('p', { class: 'now-empty' },
-        state.loading ? 'Loading prices…' : 'No price for this hour — check your connection.'));
+      box.className = 'hero hero-loading';
+      box.append(h('p', { class: 'hero-eyebrow' }, 'Now'),
+        h('p', { class: 'hero-word hero-word-quiet' },
+          state.loading ? 'Loading…' : 'No prices — check your connection'));
       return;
     }
-
     const cur = o.current;
-    const win = o.currentWindow;
-    const until = win ? ' until ' + T.timeLabel(win.endMs, win.hours[0].date) : '';
-    const advice = ADVICE[cur.tier] ? ' — ' + ADVICE[cur.tier] : '';
-
+    const v = VERDICT[cur.tier];
+    const end = stretchEnd(hours, cur);
+    box.className = 'hero hero-' + cur.tier;
     box.append(
-      eyebrow(' · ' + cur.label + '–' + T.timeLabel(cur.endMs, cur.date)),
-      h('p', { class: 'now-price' }, T.euro(cur.allIn), h('span', { class: 'unit' }, ' per kWh')),
-      h('p', { class: 'tier-line' }, tierLabel(cur.tier), until + advice),
-      nextLine(o, d)
+      h('p', { class: 'hero-eyebrow' }, 'Now · ', nl('Nu · ' + NAMES[cur.tier][1])),
+      h('p', { class: 'hero-word' + (v.word.length > 6 ? ' is-long' : '') }, v.word),
+      end.known ? h('p', { class: 'hero-until' }, 'until ' + at(end.endMs, d)) : null,
+      h('p', { class: 'hero-advice' }, v.advice)
     );
   }
 
-  function nextLine(o, d) {
-    if (o.nextGood) {
-      const w = o.nextGood;
-      const date = w.hours[0].date;
-      return h('p', { class: 'now-next' },
-        'Next ' + (w.tier === 'free' ? 'free' : 'cheap') + ': ' + relDay(date, d) + ' ' +
-        T.span(w.startMs, w.endMs, date) + ' · ' + T.euroRange(w.min, w.max));
-    }
-    if (o.bestAhead) {
-      const b = o.bestAhead;
-      const date = C.localParts(b.startMs).date;
-      const known = dayFor(d.tomorrow) ? '' : ' so far';
-      return h('p', { class: 'now-next' },
-        'No cheap hours ahead' + known + '. Cheapest ' + CFG.bestWindowHours + ' hours: ' + relDay(date, d) + ' ' +
-        T.span(b.startMs, b.endMs, date) + ' · ' + T.euro(b.average));
-    }
-    return null;
+  // ---- Next cheap / next expensive / tomorrow ------------------------------
+
+  function keyTile(extraClass, label, day, value, sub) {
+    return h('div', { class: 'key ' + extraClass },
+      h('p', { class: 'key-label' }, label),
+      day ? h('p', { class: 'key-day' }, day) : null,
+      h('p', { class: 'key-value' }, value),
+      sub ? h('p', { class: 'key-sub' }, sub) : null);
   }
 
-  // ---- Appliances ----------------------------------------------------------
-
-  // A phone charge costs a fraction of a cent; "€0.00" reads like a bug.
-  function runCost(eur) {
-    return eur > 0 && eur < 0.01 ? '< €0.01' : T.euro(eur);
+  function windowTile(extraClass, label, w, d, fallback) {
+    if (!w) return keyTile(extraClass, label, null, fallback[0], fallback[1]);
+    const date = w.hours[0].date;
+    return keyTile(extraClass, label, capital(relDay(date, d)), T.span(w.startMs, w.endMs, date));
   }
 
-  function renderAppliances(o, d) {
-    const list = byId('appliances');
-    list.replaceChildren();
-    if (!o) {
-      list.append(h('li', { class: 'appliance-empty' }, state.loading ? 'Loading…' : 'No prices yet.'));
-      return;
-    }
-    o.appliances.forEach((a) => {
-      if (!a.best) return;
-      const date = C.localParts(a.best.startMs).date;
-      const startsNow = !!o.current && a.best.startMs === o.current.startMs;
-      list.append(h('li', { class: 'appliance' },
-        h('span', { class: 'appliance-name' }, a.appliance.name, h('span', { class: 'muted' }, ' · ' + a.appliance.hours + 'h')),
-        h('span', { class: 'appliance-when' },
-          startsNow ? h('strong', {}, 'Start now') : ['Start ', h('strong', {}, T.timeLabel(a.best.startMs, date)), ' ' + relDay(date, d)]),
-        h('span', { class: 'appliance-cost' },
-          h('strong', {}, runCost(a.best.cost)),
-          a.now && !startsNow ? h('span', { class: 'muted' }, 'now ' + runCost(a.now.cost)) : null)
-      ));
-    });
-  }
-
-  // ---- Day chart -----------------------------------------------------------
-
-  function scaleFor(plans) {
-    const max = Math.max.apply(null, [0.1].concat(plans.map((p) => p.stats.max)));
-    const step = max <= 0.3 ? 0.1 : max <= 0.8 ? 0.2 : 0.5;
-    const top = Math.ceil(max / step - 1e-9) * step;
-    const ticks = [];
-    for (let t = step; t <= top + 1e-9; t += step) ticks.push(Math.round(t * 100) / 100);
-    return { top: top, ticks: ticks };
-  }
-
-  const pct = (v, scale) => Math.max(0, Math.min(100, (v / scale.top) * 100));
-
-  function readoutParts(hr) {
-    return [hr.label + '–' + T.timeLabel(hr.endMs, hr.date) + '  ', h('strong', {}, T.euro(hr.allIn)), ' per kWh  ', tierLabel(hr.tier)];
-  }
-
-  function defaultSelection(plan, now) {
-    if (state.selected[plan.date] != null) return state.selected[plan.date];
-    const current = plan.hours.findIndex((x) => x.startMs <= now && now < x.endMs);
-    if (current >= 0) return current;
-    return plan.hours.reduce((best, x, i) => (x.allIn < plan.hours[best].allIn ? i : best), 0);
-  }
-
-  function chart(plan, now, scale) {
-    const n = plan.hours.length;
-    const readout = h('p', { class: 'readout', 'aria-live': 'polite' });
-    const cols = h('div', { class: 'cols', style: '--cols:' + n });
-
-    const select = (i) => {
-      state.selected[plan.date] = i;
-      readout.replaceChildren.apply(readout, readoutParts(plan.hours[i]).flat());
-      Array.prototype.forEach.call(cols.children, (c, j) => c.classList.toggle('is-selected', j === i));
-    };
-
-    plan.hours.forEach((hr, i) => {
-      const isNow = hr.startMs <= now && now < hr.endMs;
-      const col = h('button', {
-        type: 'button',
-        class: 'col' + (isNow ? ' is-now' : ''),
-        'aria-label': hr.label + ', ' + T.euro(hr.allIn) + ' per kWh, ' + NAMES[hr.tier][2],
-      }, h('span', { class: 'bar tier-' + hr.tier, style: 'height:' + Math.max(pct(hr.allIn, scale), 1) + '%' }));
-      col.addEventListener('pointerenter', () => select(i));
-      col.addEventListener('focus', () => select(i));
-      col.addEventListener('click', () => select(i));
-      cols.append(col);
-    });
-
-    const grid = h('div', { class: 'grid', 'aria-hidden': 'true' },
-      scale.ticks.map((t) => h('div', { class: 'gridline', style: 'bottom:' + pct(t, scale) + '%' }, h('span', { class: 'tick' }, T.euro(t)))));
-
-    const plot = h('div', { class: 'plot' }, grid, cols);
-    const first = plan.hours[0].startMs;
-    const last = plan.hours[n - 1].endMs;
-    if (now >= first && now < last) {
-      const at = ((now - first) / (last - first)) * 100;
-      // Late in the day the label would run off the right edge, so it flips left.
-      plot.append(h('div', { class: 'now-marker' + (at > 80 ? ' label-left' : ''), style: 'left:' + at + '%', 'aria-hidden': 'true' },
-        h('span', {}, 'now')));
-    }
-
-    let bestRow = null;
-    if (plan.best) {
-      const i0 = plan.hours.findIndex((x) => x.startMs === plan.best.startMs);
-      bestRow = h('div', { class: 'best-row', style: '--cols:' + n, 'aria-hidden': 'true' },
-        h('span', { class: 'best-mark', style: 'grid-column:' + (i0 + 1) + ' / span ' + CFG.bestWindowHours }, '⭐ best ' + CFG.bestWindowHours + 'h'));
-    }
-
-    const axis = h('div', { class: 'axis', style: '--cols:' + n, 'aria-hidden': 'true' },
-      plan.hours.map((hr) => h('span', {}, hr.hour % 6 === 0 ? C.pad(hr.hour) : '')));
-
-    select(defaultSelection(plan, now));
-    return [h('div', { class: 'chart' }, bestRow, plot, axis), readout];
-  }
-
-  function table(plan) {
-    const details = h('details', { class: 'table-view', open: !!state.tableOpen[plan.date] },
-      h('summary', {}, 'All hourly prices'),
-      h('div', { class: 'table-wrap' },
-        h('table', {},
-          h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Hour'), h('th', { scope: 'col', class: 'num' }, '€ per kWh'), h('th', { scope: 'col' }, 'Price level'))),
-          h('tbody', {}, plan.hours.map((hr) => h('tr', {},
-            h('td', {}, hr.label + '–' + T.timeLabel(hr.endMs, hr.date)),
-            h('td', { class: 'num' }, T.euro(hr.allIn)),
-            h('td', {}, tierLabel(hr.tier))))))));
-    details.addEventListener('toggle', () => { state.tableOpen[plan.date] = details.open; });
-    return details;
-  }
-
-  // Same words as the calendar event title. Each " · " part stays on one line,
-  // so a chip wraps between parts, never inside a time or price range.
-  function chipParts(title) {
-    return title.split(' · ').map((part, i) => [i ? ' · ' : '', h('span', { class: 'chip-part' }, part)]);
-  }
-
-  function emptyDayText(date, d) {
-    const problem = state.problems[date];
-    if (problem === 'offline') return 'Couldn’t load prices — check your connection. Trying again every 15 minutes.';
-    if (!problem) return 'Loading prices…';
-    if (date === d.tomorrow) {
-      return C.localParts(Date.now()).hour < 13
-        ? 'Tomorrow’s prices arrive around 14:00.'
-        : 'Not published yet — checking again every 15 minutes.';
-    }
-    return state.loading ? 'Loading prices…' : 'No prices for today yet.';
-  }
-
-  function renderDay(id, date, plan, words, now, scale, d) {
-    const box = byId(id);
-    box.replaceChildren();
-    const head = h('header', { class: 'day-head' },
-      h('h2', {}, nl(words[0]), ' · ' + words[1] + ' ', h('span', { class: 'muted' }, T.dayLabel(date))));
-    box.append(head);
-
+  function tomorrowTile(plan, d) {
+    const tile = h('div', { class: 'key key-tomorrow' },
+      h('p', { class: 'key-label' }, 'Tomorrow · ', nl('Morgen'), ' · ' + T.dayLabel(d.tomorrow)));
     if (!plan) {
-      box.append(h('p', { class: 'day-empty' }, emptyDayText(date, d)));
+      tile.append(h('p', { class: 'key-value' },
+        state.problems[d.tomorrow] === 'offline' ? 'Couldn’t load' : 'Known around 14:00'));
+      return tile;
+    }
+    const groups = ['free', 'cheap', 'expensive']
+      .map((tier) => [tier, plan.windows.filter((w) => w.tier === tier)])
+      .filter((g) => g[1].length);
+    if (!groups.length) {
+      tile.append(h('p', { class: 'key-value' }, '⚪ Normal all day'),
+        plan.best ? h('p', { class: 'key-sub' }, 'Least expensive: ' + T.span(plan.best.startMs, plan.best.endMs, plan.date)) : null);
+      return tile;
+    }
+    tile.append(h('ul', { class: 'tomorrow-list' }, groups.map((g) => h('li', {},
+      h('span', { class: 'tomorrow-tier' }, NAMES[g[0]][0] + ' ' + NAMES[g[0]][2]),
+      h('span', { class: 'tomorrow-times' }, g[1].map((w) => h('span', {}, T.span(w.startMs, w.endMs, plan.date))))))));
+    return tile;
+  }
+
+  function renderKeys(o, plans, d) {
+    const box = byId('keys');
+    box.replaceChildren();
+    if (!o) return;
+    const tomorrowPlan = plans.find((p) => p.date === d.tomorrow);
+    const waiting = ['Not today', 'Tomorrow is known around 14:00'];
+    const cheapNow = o.current && (o.current.tier === 'cheap' || o.current.tier === 'free');
+    box.append(
+      windowTile('key-cheap', o.nextGood && o.nextGood.tier === 'free' ? '🆓 Next free' : '🟢 Next cheap', o.nextGood, d,
+        tomorrowPlan ? (cheapNow ? ['Now', 'Nothing cheaper later'] : ['None', 'Not before the end of tomorrow']) : waiting),
+      windowTile('key-expensive', '🔴 Next expensive', o.nextExpensive, d,
+        tomorrowPlan ? ['None', 'Not before the end of tomorrow'] : waiting),
+      tomorrowTile(tomorrowPlan, d)
+    );
+  }
+
+  // ---- Strip: now → end of tomorrow ----------------------------------------
+
+  function renderStrip(hoursAll, now, d) {
+    const box = byId('strip');
+    box.replaceChildren();
+    const hours = hoursAll.filter((x) => x.endMs > now);
+    if (!hours.length) {
+      box.append(h('p', { class: 'muted' }, state.loading ? 'Loading…' : 'No prices yet.'));
       return;
     }
+    const start = hours[0].startMs;
+    const span = hours[hours.length - 1].endMs - start;
+    const frac = (ms) => ((ms - start) / span) * 100;
 
-    head.append(h('p', { class: 'day-stats' },
-      'average ' + T.euro(plan.stats.average) + ' · range ' + T.euroRange(plan.stats.min, plan.stats.max)));
+    const runs = [];
+    hours.forEach((x) => {
+      const last = runs[runs.length - 1];
+      if (last && last.tier === x.tier && last.endMs === x.startMs) last.endMs = x.endMs;
+      else runs.push({ tier: x.tier, startMs: x.startMs, endMs: x.endMs });
+    });
 
-    const events = T.eventsForPlan(plan, CFG);
-    // chart() returns two nodes; Element.append would print an array as text.
+    const labels = h('div', { class: 'strip-labels', 'aria-hidden': 'true' });
+    hours.forEach((x) => {
+      const left = frac(x.startMs);
+      if (x.hour % 6 !== 0 || left < 8 || left > 92) return;
+      labels.append(h('span', { class: 'strip-label' + (x.hour === 0 ? ' is-day' : ''), style: 'left:' + left + '%' },
+        x.hour === 0 ? T.dayLabel(x.date).split(' ')[0] : C.pad(x.hour)));
+    });
+
+    const present = ['free', 'cheap', 'normal', 'expensive'].filter((t) => runs.some((r) => r.tier === t));
     box.append(
-      ...chart(plan, now, scale),
-      events.length
-        ? h('ul', { class: 'chips', 'aria-label': 'Windows' }, events.map((e) => h('li', { class: 'chip' }, chipParts(e.title))))
-        : h('p', { class: 'day-empty' }, 'No stand-out hours — prices are close all day.'),
-      table(plan)
+      h('div', { class: 'strip' },
+        h('span', { class: 'strip-now', style: 'left:' + frac(now) + '%', 'aria-hidden': 'true' }, h('span', {}, 'now')),
+        h('div', {
+          class: 'strip-bar',
+          role: 'img',
+          'aria-label': runs.map((r) => NAMES[r.tier][2] + ' until ' + at(r.endMs, d)).join(', '),
+        }, runs.map((r) => h('span', { class: 'strip-run tier-' + r.tier, style: 'flex-grow:' + (r.endMs - r.startMs) / C.HOUR }))),
+        labels),
+      h('ul', { class: 'legend' }, present.map((t) =>
+        h('li', {}, h('span', { class: 'swatch tier-' + t, 'aria-hidden': 'true' }), NAMES[t][2])))
     );
   }
 
@@ -375,18 +308,15 @@
   function renderFooter(d) {
     const f = byId('footer');
     f.replaceChildren();
-    const t = CFG.tariff;
-    const source = state.sources[d.today] || state.sources[d.tomorrow];
     const offline = state.problems[d.today] === 'offline' || state.problems[d.tomorrow] === 'offline';
+    const source = state.sources[d.today] || state.sources[d.tomorrow];
     // Element.append(null) inserts the text "null" — only pass real nodes.
     [
       offline && state.savedAt[d.today]
-        ? h('p', { class: 'stale' }, 'Offline — showing prices saved at ' + clock(state.savedAt[d.today]) + '.')
+        ? h('p', { class: 'stale' }, 'Offline — showing what was loaded at ' + clock(state.savedAt[d.today]) + '.')
         : null,
-      h('p', {}, 'Price per kWh = market price × ' + t.vatMultiplier + ' VAT + €' + t.energyTaxInclVat +
-        ' energy tax + €' + t.supplierMarkupInclVat + ' Eneco fee (Eneco Dynamisch).'),
-      h('p', {}, 'Market prices: EPEX day-ahead' + (source ? ' via ' + source : '') +
-        (state.checkedAt ? ' · checked ' + clock(state.checkedAt) : '') + '.'),
+      h('p', {}, 'Eneco Dynamisch · market prices' + (source ? ' via ' + source : '') +
+        (state.checkedAt ? ' · checked ' + clock(state.checkedAt) : '')),
     ].forEach((node) => { if (node) f.append(node); });
   }
 
@@ -399,13 +329,12 @@
 
     const plans = [d.today, d.tomorrow].map(dayFor).filter(Boolean).map((day) => C.planDay(day, CFG));
     const o = plans.length ? C.outlook(plans, now, CFG) : null;
-    const scale = scaleFor(plans);
+    const hours = plans.reduce((all, p) => all.concat(p.hours), []).sort((a, b) => a.startMs - b.startMs);
 
     byId('today-label').textContent = T.dayLabel(d.today);
-    renderNow(o, d);
-    renderAppliances(o, d);
-    renderDay('day-today', d.today, plans.find((p) => p.date === d.today), ['Vandaag', 'Today'], now, scale, d);
-    renderDay('day-tomorrow', d.tomorrow, plans.find((p) => p.date === d.tomorrow), ['Morgen', 'Tomorrow'], now, scale, d);
+    renderHero(o, hours, d);
+    renderKeys(o, plans, d);
+    renderStrip(hours, now, d);
     renderFooter(d);
   }
 

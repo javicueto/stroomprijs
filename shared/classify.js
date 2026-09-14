@@ -251,6 +251,7 @@ var StroomCore = (function () {
       current: current,
       currentWindow: wins.find((w) => w.startMs <= nowMs && nowMs < w.endMs) || null,
       nextGood: wins.find((w) => isGood(w) && w.startMs > nowMs) || null,
+      nextExpensive: wins.find((w) => w.tier === 'expensive' && w.startMs > nowMs) || null,
       bestAhead: cheapestBlock(ahead, config.bestWindowHours, fromMs),
       knownUntilMs: hours.length ? hours[hours.length - 1].endMs : null,
       appliances: config.appliances.map((a) => ({

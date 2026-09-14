@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>⚡ Stroom</title>
-  <meta name="description" content="Cheap, free and expensive electricity hours for today and tomorrow — Eneco Dynamisch.">
+  <meta name="description" content="Is electricity cheap now? When is it cheap next? And tomorrow? — Eneco Dynamisch.">
   <meta name="theme-color" content="#f1f0ec" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -21,19 +21,14 @@
       <p class="today-label" id="today-label"></p>
     </header>
 
-    <div class="rail">
-      <section class="now" id="now" aria-live="polite" aria-label="Price now"></section>
+    <section class="hero" id="hero" aria-live="polite" aria-label="Electricity now"></section>
 
-      <section class="card appliances" aria-labelledby="appliances-title">
-        <h2 id="appliances-title"><span lang="nl">Wanneer aanzetten</span> · Best time to start</h2>
-        <ul class="appliance-list" id="appliances"></ul>
-      </section>
-    </div>
+    <section class="keys" id="keys" aria-label="Next cheap and expensive hours, and tomorrow"></section>
 
-    <div class="main">
-      <section class="card day" id="day-today" aria-label="Today"></section>
-      <section class="card day" id="day-tomorrow" aria-label="Tomorrow"></section>
-    </div>
+    <section class="strip-card" aria-labelledby="strip-title">
+      <h2 class="section-label" id="strip-title">From now to the end of tomorrow</h2>
+      <div id="strip"></div>
+    </section>
 
     <footer class="footer" id="footer"></footer>
   </main>

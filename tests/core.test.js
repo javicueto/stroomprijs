@@ -195,6 +195,8 @@ test('outlook at 22:30 on 14 Sep: now expensive, next cheap is tomorrow 11:00, d
   assert.equal(o.currentWindow.tier, 'expensive');
   assert.equal(text.span(o.nextGood.startMs, o.nextGood.endMs, o.nextGood.hours[0].date), '11:00–16:00');
   assert.equal(o.nextGood.hours[0].date, '2026-09-15');
+  // Now is inside today's 18–23 expensive window, so "next" is tomorrow morning's peak.
+  assert.equal(text.span(o.nextExpensive.startMs, o.nextExpensive.endMs, '2026-09-15'), '06:00–09:00');
   const dryer = o.appliances.find((a) => a.appliance.id === 'dryer');
   // 12–14h averages €0.1869, 13–15h €0.1874: a near tie, the earlier start wins.
   assert.equal(core.localParts(dryer.best.startMs).hour, 12);

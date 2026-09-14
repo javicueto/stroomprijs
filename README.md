@@ -9,9 +9,14 @@ in a shared Google Calendar, and on a phone page:
 - **iPhone (Safari):** open the link → Share button → **Add to Home Screen**.
 - **Android (Chrome):** open the link → ⋮ menu → **Add to Home screen**.
 
-It opens like an app, shows the price now, the best time to start the
-dishwasher, washer and dryer, and today’s and tomorrow’s hours. It still shows
-the last prices it loaded when you’re offline.
+It opens like an app and answers three things at a glance, in colour:
+
+- **Now:** one big word — FREE, CHEAP, NORMAL or EXPENSIVE — and until when.
+- **Next cheap / next expensive:** the day and the hours.
+- **Tomorrow:** its cheap and expensive hours, plus a colour strip from now to
+  the end of tomorrow.
+
+No prices, no charts. It still shows what it last loaded when you’re offline.
 
 Every afternoon a Google Apps Script reads tomorrow’s market prices, applies
 Eneco’s formula and writes events like:
