@@ -1,0 +1,57 @@
+name: Test and publish the page
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Tests
+        run: node --test tests/
+
+      # web/shared and apps-script hold generated copies. A stale copy would
+      # publish old price logic while every test on shared/ passes.
+      - name: Generated copies match shared/ and config/
+        run: |
+          for f in classify.js describe.js fetch-prices.js; do
+            for dest in web/shared apps-script; do
+              diff <(tail -n +3 "$dest/$f") "shared/$f" > /dev/null \
+                || { echo "::error::$dest/$f is out of date — run scripts/sync_shared.sh"; exit 1; }
+            done
+          done
+          for dest in web/shared apps-script; do
+            node -e '
+              const fs = require("fs");
+              const copy = require("./" + process.argv[1] + "/config.js");
+              const source = JSON.parse(fs.readFileSync("config/tariff.json", "utf8"));
+              if (JSON.stringify(copy) !== JSON.stringify(source)) { console.error("::error::" + process.argv[1] + "/config.js is out of date — run scripts/sync_shared.sh"); process.exit(1); }
+            ' "$dest"
+          done
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - uses: actions/deploy-pages@v4

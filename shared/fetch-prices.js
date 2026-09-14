@@ -1,0 +1,92 @@
+/*
+ * Stroom — price feeds. Builds requests and parses responses; the actual
+ * HTTP call is passed in, because Apps Script (UrlFetchApp, synchronous) and
+ * the browser (fetch, asynchronous) do it differently.
+ *
+ * Both feeds are public, need no login and return the EPEX day-ahead price
+ * excluding VAT. The Eneco formula is applied afterwards in StroomCore.
+ *
+ * Single source of truth — edit here in shared/ only.
+ */
+var StroomFeeds = (function () {
+  'use strict';
+
+  function core() {
+    return typeof StroomCore !== 'undefined' ? StroomCore : require('./classify.js');
+  }
+
+  const SOURCES = [
+    {
+      name: 'EnergyZero',
+      request: function (dateStr) {
+        const r = core().dayRange(dateStr);
+        // inclBtw=false on purpose: EnergyZero rounds its incl-VAT price to
+        // 2 decimals, which puts the Eneco price off by up to half a cent.
+        // The excl-VAT field has full precision. Do not "simplify" this.
+        return {
+          method: 'get',
+          url: 'https://api.energyzero.nl/v1/energyprices' +
+            '?fromDate=' + new Date(r.start).toISOString() +
+            '&tillDate=' + new Date(r.end - 1).toISOString() +
+            '&interval=4&usageType=1&inclBtw=false',
+        };
+      },
+      parse: function (json) {
+        if (!json || !Array.isArray(json.Prices)) throw new Error('unexpected response');
+        return json.Prices.map((p) => ({ startMs: Date.parse(p.readingDate), spotExVat: Number(p.price) }));
+      },
+    },
+    {
+      name: 'Frank Energie',
+      request: function (dateStr) {
+        return {
+          method: 'post',
+          url: 'https://frank-graphql-prod.graphcdn.app/',
+          body: JSON.stringify({
+            query: 'query($d: String!) { marketPrices(date: $d) { electricityPrices { from marketPrice } } }',
+            variables: { d: dateStr },
+          }),
+        };
+      },
+      parse: function (json) {
+        const list = json && json.data && json.data.marketPrices && json.data.marketPrices.electricityPrices;
+        if (!Array.isArray(list)) throw new Error('unexpected response');
+        return list.map((p) => ({ startMs: Date.parse(p.from), spotExVat: Number(p.marketPrice) }));
+      },
+    },
+  ];
+
+  // Tries each source in order; the first complete day wins.
+  // Returns {day, source, notes} — day is null when no source had it.
+  function loadDaySync(dateStr, fetchJson, tariff) {
+    const notes = [];
+    for (const s of SOURCES) {
+      try {
+        const day = core().buildDay(dateStr, s.parse(fetchJson(s.request(dateStr))), tariff);
+        if (day.complete) return { day: day, source: s.name, notes: notes };
+        notes.push(s.name + ': ' + day.hours.length + ' of ' + day.expectedHours + ' hours');
+      } catch (e) {
+        notes.push(s.name + ': ' + e.message);
+      }
+    }
+    return { day: null, source: null, notes: notes };
+  }
+
+  async function loadDay(dateStr, fetchJson, tariff) {
+    const notes = [];
+    for (const s of SOURCES) {
+      try {
+        const day = core().buildDay(dateStr, s.parse(await fetchJson(s.request(dateStr))), tariff);
+        if (day.complete) return { day: day, source: s.name, notes: notes };
+        notes.push(s.name + ': ' + day.hours.length + ' of ' + day.expectedHours + ' hours');
+      } catch (e) {
+        notes.push(s.name + ': ' + e.message);
+      }
+    }
+    return { day: null, source: null, notes: notes };
+  }
+
+  const api = { SOURCES: SOURCES, loadDaySync: loadDaySync, loadDay: loadDay };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  return api;
+})();

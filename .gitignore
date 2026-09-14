@@ -1,0 +1,10 @@
+# Personal settings — email addresses. The repo is public.
+config/private.json
+apps-script/private-config.js
+
+# Personal working notes (household usage, email addresses) and local tooling.
+docs/BUILD_PLAN.md
+.claude/
+
+.DS_Store
+node_modules/

@@ -1,0 +1,23 @@
+{
+  "scriptId": "1JeVf7X0Fl5Id4FJIhuK205E6pm3w2Lgswq7axvacNSjtsvqhRVtX82Te",
+  "rootDir": "apps-script",
+  "scriptExtensions": [
+    ".js",
+    ".gs"
+  ],
+  "htmlExtensions": [
+    ".html"
+  ],
+  "jsonExtensions": [
+    ".json"
+  ],
+  "filePushOrder": [
+    "apps-script/config.js",
+    "apps-script/private-config.js",
+    "apps-script/classify.js",
+    "apps-script/describe.js",
+    "apps-script/fetch-prices.js",
+    "apps-script/Code.js"
+  ],
+  "skipSubdirectories": false
+}

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>⚡ Stroom</title>
+  <meta name="description" content="Cheap, free and expensive electricity hours for today and tomorrow — Eneco Dynamisch.">
+  <meta name="theme-color" content="#f1f0ec" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Stroom">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="page">
+    <header class="masthead">
+      <p class="brand">⚡ Stroom</p>
+      <p class="today-label" id="today-label"></p>
+    </header>
+
+    <div class="rail">
+      <section class="now" id="now" aria-live="polite" aria-label="Price now"></section>
+
+      <section class="card appliances" aria-labelledby="appliances-title">
+        <h2 id="appliances-title"><span lang="nl">Wanneer aanzetten</span> · Best time to start</h2>
+        <ul class="appliance-list" id="appliances"></ul>
+      </section>
+    </div>
+
+    <div class="main">
+      <section class="card day" id="day-today" aria-label="Today"></section>
+      <section class="card day" id="day-tomorrow" aria-label="Tomorrow"></section>
+    </div>
+
+    <footer class="footer" id="footer"></footer>
+  </main>
+
+  <noscript><p class="page">This page needs JavaScript to load the prices.</p></noscript>
+
+  <script src="shared/config.js"></script>
+  <script src="shared/classify.js"></script>
+  <script src="shared/describe.js"></script>
+  <script src="shared/fetch-prices.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
