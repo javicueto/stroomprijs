@@ -18,7 +18,13 @@
   <main class="page">
     <header class="masthead">
       <p class="brand">⚡ Stroom</p>
-      <p class="today-label" id="today-label"></p>
+      <div class="masthead-end">
+        <p class="today-label" id="today-label"></p>
+        <div class="clock-toggle" id="clock-toggle" role="group" aria-label="Time format">
+          <button type="button" data-hour12="false" aria-pressed="true">24h</button>
+          <button type="button" data-hour12="true" aria-pressed="false">12h</button>
+        </div>
+      </div>
     </header>
 
     <section class="hero" id="hero" aria-live="polite" aria-label="Electricity now"></section>

@@ -21,6 +21,8 @@
     "minWindowHours": 2
   },
 
+  "pageUrl": "https://javicueto.github.io/stroomprijs/",
+
   "bestWindowHours": 3,
 
   "appliances": [

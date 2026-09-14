@@ -39,6 +39,7 @@
     problems: {},    // date → 'unpublished' | 'offline'
     checkedAt: null,
     loading: true,
+    hour12: false,   // time format for the whole page; remembered per phone
   };
 
   // ---- Local copy — a convenience; the page works without it ---------------
@@ -155,9 +156,27 @@
   const nl = (text) => h('span', { lang: 'nl' }, text);
   const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-  function clock(ms) {
+  // Every time shown on the page goes through fmt(), so the 24h/12h switch
+  // applies everywhere at once. "16:00" or "4 pm" / "4:30 pm".
+  function fmt(hour, minute) {
+    if (!state.hour12) return C.pad(hour) + ':' + C.pad(minute);
+    const h12 = hour % 12 === 0 ? 12 : hour % 12;
+    return h12 + (minute ? ':' + C.pad(minute) : '') + ' ' + (hour < 12 ? 'am' : 'pm');
+  }
+
+  // The end of `date` reads "24:00" (or "12 am"), not the next day's "00:00".
+  function timeOf(ms, date) {
+    if (date && ms === C.dayRange(date).end) return state.hour12 ? '12 am' : '24:00';
     const lp = C.localParts(ms);
-    return C.pad(lp.hour) + ':' + C.pad(lp.minute);
+    return fmt(lp.hour, lp.minute);
+  }
+
+  function spanText(startMs, endMs, date) {
+    return timeOf(startMs, date) + '–' + timeOf(endMs, date);
+  }
+
+  function clock(ms) {
+    return timeOf(ms);
   }
 
   function relDay(date, d) {
@@ -170,7 +189,7 @@
   function at(ms, d) {
     const lp = C.localParts(ms);
     if (lp.hour === 0 && lp.minute === 0) return lp.date === d.tomorrow ? 'midnight' : 'midnight tomorrow';
-    const time = C.pad(lp.hour) + ':' + C.pad(lp.minute);
+    const time = fmt(lp.hour, lp.minute);
     return lp.date === d.today ? time : time + ' ' + relDay(lp.date, d);
   }
 
@@ -198,7 +217,7 @@
     const end = stretchEnd(hours, cur);
     box.className = 'hero hero-' + cur.tier;
     box.append(
-      h('p', { class: 'hero-eyebrow' }, 'Now · ', nl('Nu · ' + NAMES[cur.tier][1])),
+      h('p', { class: 'hero-eyebrow' }, 'Now ' + clock(Date.now())),
       h('p', { class: 'hero-word' + (v.word.length > 6 ? ' is-long' : '') }, v.word),
       end.known ? h('p', { class: 'hero-until' }, 'until ' + at(end.endMs, d)) : null,
       h('p', { class: 'hero-advice' }, v.advice)
@@ -218,7 +237,7 @@
   function windowTile(extraClass, label, w, d, fallback) {
     if (!w) return keyTile(extraClass, label, null, fallback[0], fallback[1]);
     const date = w.hours[0].date;
-    return keyTile(extraClass, label, capital(relDay(date, d)), T.span(w.startMs, w.endMs, date));
+    return keyTile(extraClass, label, capital(relDay(date, d)), spanText(w.startMs, w.endMs, date));
   }
 
   function tomorrowTile(plan, d) {
@@ -234,12 +253,12 @@
       .filter((g) => g[1].length);
     if (!groups.length) {
       tile.append(h('p', { class: 'key-value' }, '⚪ Normal all day'),
-        plan.best ? h('p', { class: 'key-sub' }, 'Least expensive: ' + T.span(plan.best.startMs, plan.best.endMs, plan.date)) : null);
+        plan.best ? h('p', { class: 'key-sub' }, 'Least expensive: ' + spanText(plan.best.startMs, plan.best.endMs, plan.date)) : null);
       return tile;
     }
     tile.append(h('ul', { class: 'tomorrow-list' }, groups.map((g) => h('li', {},
       h('span', { class: 'tomorrow-tier' }, NAMES[g[0]][0] + ' ' + NAMES[g[0]][2]),
-      h('span', { class: 'tomorrow-times' }, g[1].map((w) => h('span', {}, T.span(w.startMs, w.endMs, plan.date))))))));
+      h('span', { class: 'tomorrow-times' }, g[1].map((w) => h('span', {}, spanText(w.startMs, w.endMs, plan.date))))))));
     return tile;
   }
 
@@ -283,24 +302,39 @@
     const labels = h('div', { class: 'strip-labels', 'aria-hidden': 'true' });
     hours.forEach((x) => {
       const left = frac(x.startMs);
-      if (x.hour % 6 !== 0 || left < 8 || left > 92) return;
+      if (x.hour % 6 !== 0 || left > 94) return;
       labels.append(h('span', { class: 'strip-label' + (x.hour === 0 ? ' is-day' : ''), style: 'left:' + left + '%' },
-        x.hour === 0 ? T.dayLabel(x.date).split(' ')[0] : C.pad(x.hour)));
+        x.hour === 0 ? T.dayLabel(x.date).split(' ').slice(0, 2).join(' ') : (state.hour12 ? fmt(x.hour, 0) : C.pad(x.hour))));
     });
+
+    // The strip always starts at the current hour, so the first run is "now".
+    const current = runs[0];
+    const bar = h('div', {
+      class: 'strip-bar',
+      role: 'img',
+      'aria-label': 'Now ' + NAMES[current.tier][2] + '. ' +
+        runs.map((r) => NAMES[r.tier][2] + ' until ' + at(r.endMs, d)).join(', '),
+    }, runs.map((r) => h('span', { class: 'strip-run tier-' + r.tier, style: 'flex-grow:' + (r.endMs - r.startMs) / C.HOUR },
+      h('span', { class: 'strip-run-label' }, NAMES[r.tier][2]))));
 
     const present = ['free', 'cheap', 'normal', 'expensive'].filter((t) => runs.some((r) => r.tier === t));
     box.append(
       h('div', { class: 'strip' },
-        h('span', { class: 'strip-now', style: 'left:' + frac(now) + '%', 'aria-hidden': 'true' }, h('span', {}, 'now')),
-        h('div', {
-          class: 'strip-bar',
-          role: 'img',
-          'aria-label': runs.map((r) => NAMES[r.tier][2] + ' until ' + at(r.endMs, d)).join(', '),
-        }, runs.map((r) => h('span', { class: 'strip-run tier-' + r.tier, style: 'flex-grow:' + (r.endMs - r.startMs) / C.HOUR }))),
+        h('span', { class: 'strip-now', style: 'left:' + frac(now) + '%', 'aria-hidden': 'true' },
+          h('span', { class: 'strip-now-tag' },
+            h('span', { class: 'swatch tier-' + current.tier }), 'Now ' + clock(now) + ' · ' + NAMES[current.tier][2])),
+        bar,
         labels),
       h('ul', { class: 'legend' }, present.map((t) =>
         h('li', {}, h('span', { class: 'swatch tier-' + t, 'aria-hidden': 'true' }), NAMES[t][2])))
     );
+
+    // A word goes inside a block only when it fits — a clipped word is worse than none.
+    requestAnimationFrame(() => {
+      bar.querySelectorAll('.strip-run-label').forEach((label) => {
+        label.hidden = label.getBoundingClientRect().width > label.parentElement.clientWidth - 6;
+      });
+    });
   }
 
   // ---- Footer --------------------------------------------------------------
@@ -332,6 +366,9 @@
     const hours = plans.reduce((all, p) => all.concat(p.hours), []).sort((a, b) => a.startMs - b.startMs);
 
     byId('today-label').textContent = T.dayLabel(d.today);
+    document.querySelectorAll('#clock-toggle button').forEach((b) => {
+      b.setAttribute('aria-pressed', String((b.dataset.hour12 === 'true') === state.hour12));
+    });
     renderHero(o, hours, d);
     renderKeys(o, plans, d);
     renderStrip(hours, now, d);
@@ -347,9 +384,27 @@
   }
 
   loadSaved();
+  state.hour12 = readStore('hour12') === true;
+  document.querySelectorAll('#clock-toggle button').forEach((b) => {
+    b.addEventListener('click', () => {
+      state.hour12 = b.dataset.hour12 === 'true';
+      writeStore('hour12', state.hour12);
+      render();
+    });
+  });
   render();
   refresh();
-  setInterval(render, TICK_MS);
+  // Redraw on the minute, so the "Now 23:31" tag never lags behind the clock.
+  setTimeout(() => {
+    render();
+    setInterval(render, TICK_MS);
+  }, TICK_MS - (Date.now() % TICK_MS) + 50);
+  // Block widths change with the screen, and so does which words fit inside them.
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 150);
+  });
   setInterval(recheck, RECHECK_MS);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;

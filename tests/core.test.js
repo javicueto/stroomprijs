@@ -122,6 +122,8 @@ test('15 Sep 2026: morning peak, cheap midday, expensive evening', () => {
   assert.ok(events.every((e) => !e.title.startsWith('⭐')));
   // Every hour of the day is listed once in each description.
   events.forEach((e) => assert.equal((e.description.match(/^\d\d:00 {2}/gm) || []).length, 24));
+  // Every event opens with the link to the live page.
+  events.forEach((e) => assert.equal(e.description.split('\n')[0], '⚡ Now and tomorrow at a glance: ' + config.pageUrl));
 });
 
 test('14 Sep 2026: the lone cheap hour at 04:00 is dropped, and the hour list agrees', () => {

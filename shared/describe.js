@@ -98,7 +98,8 @@ var StroomText = (function () {
     const start = timeLabel(block.startMs, plan.date);
     const end = timeLabel(block.endMs, plan.date);
     const n = config.bestWindowHours;
-    const lines = [];
+    // The live page link goes first, so it shows without expanding the event on a phone.
+    const lines = config.pageUrl ? ['⚡ Now and tomorrow at a glance: ' + config.pageUrl, ''] : [];
 
     if (kind === 'free') {
       lines.push('The market price is below zero — you only pay energy tax and Eneco’s fee.');

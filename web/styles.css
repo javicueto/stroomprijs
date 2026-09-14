@@ -27,6 +27,8 @@
   --tier-cheap: #1baf7a;
   --tier-normal: #c9c7c0;
   --tier-expensive: #e34948;
+  --on-tier: #0b0b0b;
+  --on-normal: #0b0b0b;
 
   /* Verdict blocks: same hues, deep enough for white text (≥ 4.5:1). */
   --hero-free: #256abf;
@@ -46,6 +48,8 @@
     --tier-cheap: #199e70;
     --tier-normal: #4a4945;
     --tier-expensive: #e66767;
+    --on-tier: #0b0b0b;
+    --on-normal: #ffffff;
   }
 }
 
@@ -78,12 +82,35 @@ h2, p { margin: 0; }
 .masthead {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-3);
   padding-inline: var(--space-1);
 }
 .brand { font-weight: 650; font-size: 1.125rem; }
+.masthead-end { display: flex; align-items: center; gap: var(--space-3); }
 .today-label { color: var(--ink-2); font-size: 0.875rem; }
+
+.clock-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--surface);
+}
+.clock-toggle button {
+  appearance: none;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.clock-toggle button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.clock-toggle button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 /* ---- Verdict ---- */
 
@@ -160,17 +187,51 @@ h2, p { margin: 0; }
   background: var(--surface);
 }
 .section-label { color: var(--ink-2); font-size: 0.875rem; font-weight: 550; }
-.strip { position: relative; padding-top: 20px; }
-.strip-bar { display: flex; gap: 2px; height: 40px; }
-.strip-run { flex-basis: 0; min-width: 2px; border-radius: 4px; }
+.strip { position: relative; padding-top: 34px; }
+.strip-bar { display: flex; gap: 2px; height: 48px; }
+.strip-run {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-basis: 0;
+  min-width: 2px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+/* Words sit inside the coloured blocks, so they take the ink that clears
+   contrast on that fill rather than the page text colour. */
+.strip-run-label {
+  display: block;
+  padding-inline: 4px;
+  color: var(--on-tier);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.strip-run.tier-normal .strip-run-label { color: var(--on-normal); }
 .strip-now {
   position: absolute;
-  top: 0;
+  top: 26px;
   bottom: 22px;
   border-left: 2px solid var(--ink);
   pointer-events: none;
 }
-.strip-now span { position: absolute; top: -2px; left: 4px; font-size: 0.75rem; font-weight: 650; }
+.strip-now-tag {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.strip-now-tag .swatch { box-shadow: 0 0 0 1px var(--surface); }
 .strip-labels { position: relative; height: 18px; margin-top: 4px; }
 .strip-label { position: absolute; font-size: 0.75rem; color: var(--ink-2); white-space: nowrap; }
 .strip-label.is-day { color: var(--ink); font-weight: 650; }
