@@ -8,9 +8,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+const crypto = require('node:crypto');
+
 const DIR = path.join(__dirname, '..', 'apps-script');
 const FIX = path.join(__dirname, 'fixtures');
 const HOUR = 3600000;
+const RUN_KEY = 'test-run-key';
 
 function sandbox({ nowIso, prices = 'fixtures', fail = false }) {
   const state = { props: {}, events: [], acl: [], reminders: null, triggers: [], mail: [], fetches: 0, calendars: {} };
@@ -51,7 +54,18 @@ function sandbox({ nowIso, prices = 'fixtures', fail = false }) {
 
   const ctx = vm.createContext({
     console: { log() {}, warn() {}, error() {} },
-    STROOM_PRIVATE: { shareWith: ['partner@example.com'], alertEmail: 'owner@example.com' },
+    STROOM_PRIVATE: {
+      shareWith: ['partner@example.com'],
+      alertEmail: 'owner@example.com',
+      runTokenSha256: crypto.createHash('sha256').update(RUN_KEY, 'utf8').digest('hex'),
+    },
+    // Apps Script returns digests as signed bytes (-128..127).
+    Utilities: {
+      DigestAlgorithm: { SHA_256: 'SHA_256' },
+      Charset: { UTF_8: 'UTF_8' },
+      computeDigest: (alg, value) => [...crypto.createHash('sha256').update(value, 'utf8').digest()].map((b) => (b > 127 ? b - 256 : b)),
+    },
+    ContentService: { createTextOutput: (s) => ({ text: s }) },
     PropertiesService: { getScriptProperties: () => props },
     UrlFetchApp: { fetch },
     MailApp: { sendEmail: (to, subject, body) => state.mail.push({ to, subject, body }) },
@@ -155,6 +169,25 @@ test('prices late: quiet at 14:00 and 15:00, one alert email at the 16:00 run', 
       assert.match(state.mail[0].body, /EnergyZero: 0 of 24 hours/);
     }
   }
+});
+
+test('run link: wrong or missing key is refused; right key replaces tomorrow and reports status only', () => {
+  const { ctx, state } = sandbox({ nowIso: '2026-09-14T13:10:00Z' });
+  ctx.setup();
+  const before = eventsFor(state, '2026-09-15').map((e) => e.id);
+
+  assert.equal(ctx.doGet({ parameter: { token: 'wrong', fn: 'rewriteTomorrow' } }).text, 'forbidden');
+  assert.equal(ctx.doGet({ parameter: { fn: 'rewriteTomorrow' } }).text, 'forbidden');
+  assert.equal(ctx.doGet(undefined).text, 'forbidden');
+  assert.deepEqual(eventsFor(state, '2026-09-15').map((e) => e.id), before, 'refused calls change nothing');
+
+  const res = ctx.doGet({ parameter: { token: RUN_KEY, fn: 'rewriteTomorrow' } }).text;
+  assert.equal(res, 'ok 2026-09-15 ' + before.length + ' events');
+  const after = eventsFor(state, '2026-09-15').map((e) => e.id);
+  assert.equal(after.length, before.length);
+  assert.ok(after.every((id) => !before.includes(id)), 'events were replaced, not duplicated');
+
+  assert.equal(ctx.doGet({ parameter: { token: RUN_KEY, fn: 'setup' } }).text, 'unknown fn');
 });
 
 test('a failure on the last run emails the error instead of failing silently', () => {

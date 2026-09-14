@@ -21,13 +21,13 @@ No prices, no charts. It still shows what it last loaded when you’re offline.
 Every afternoon a Google Apps Script reads tomorrow’s market prices, applies
 Eneco’s formula and writes events like:
 
-- `🆓 Gratis · Free power 12:00–15:00 · €0.07`
-- `🟢 Goedkoop · Cheap 11:00–16:00 · €0.18–0.26`
-- `🔴 Duur · Avoid 18:00–22:00 · €0.40–0.46`
-- `⭐ Beste tijd · Best 3h 03:00–06:00 · €0.23` (only on days with no cheap hours)
+- `🆓 Gratis · Free power 12:00–15:00`
+- `🟢 Goedkoop · Cheap 11:00–16:00`
+- `🔴 Duur · Avoid 18:00–22:00`
+- `⭐ Beste tijd · Best 3h 03:00–06:00` (only on days with no cheap hours)
 
-Each event lists what a dishwasher, washer or dryer run costs then vs. the
-worst (or best) time, plus all 24 hourly prices.
+Each event opens with the link to the page, then says what to run or avoid.
+No prices.
 
 ## How the price is calculated
 
@@ -91,6 +91,24 @@ Script: “Stroom calendar” on script.google.com (id in `.clasp.json`).
 | `rewriteTomorrow()` / `rewriteToday()` | Replace that day’s events now. |
 
 Only events the script wrote are ever touched.
+
+### Private run link
+
+The script is also deployed as a web app so `rewriteToday` / `rewriteTomorrow`
+can run without opening the editor:
+
+```bash
+curl -sL "<run link>?token=<secret>&fn=rewriteTomorrow"
+```
+
+- The link and secret live only in `~/.claude/tokens.json` (`stroom_run_url`,
+  `stroom_run_token`). The project holds just the secret’s SHA-256 hash, in
+  `config/private.json`, which is never committed.
+- It can do those two things only and answers with a status line
+  (`ok 2026-09-15 3 events`), never event contents.
+- After `clasp push`, run `clasp update-deployment <id>` so the link serves the
+  new code (the id is in `tokens.json` as `stroom_run_deployment`).
+- To remove it: script editor → Deploy → Manage deployments → Archive.
 
 ## For people the calendar is shared with
 

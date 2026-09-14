@@ -111,17 +111,17 @@ test('15 Sep 2026: morning peak, cheap midday, expensive evening', () => {
   // the €0.40 rail), 11–15h are the five hours ≥ €0.04 below the €0.35
   // average, 18–21h are €0.40–0.46.
   assert.deepEqual(events.map((e) => e.title), [
-    '🔴 Duur · Avoid 06:00–09:00 · €0.41–0.43',
-    '🟢 Goedkoop · Cheap 11:00–16:00 · €0.18–0.26',
-    '🔴 Duur · Avoid 18:00–22:00 · €0.40–0.46',
+    '🔴 Duur · Avoid 06:00–09:00',
+    '🟢 Goedkoop · Cheap 11:00–16:00',
+    '🔴 Duur · Avoid 18:00–22:00',
   ]);
-  assert.match(events[0].description, /^• Dishwasher \(eco, 3h\): €0\.42 · €0\.19 at 12:00$/m);
   assert.match(events[0].description, /^Start before 06:00, or wait until 09:00\.$/m);
+  assert.match(events[0].description, /^Cheapest 3 hours that day: 12:00–15:00\.$/m);
   // The cheapest 3 hours sit inside a cheap window, so no separate ⭐ event.
   assert.equal(plan.showBest, false);
   assert.ok(events.every((e) => !e.title.startsWith('⭐')));
-  // Every hour of the day is listed once in each description.
-  events.forEach((e) => assert.equal((e.description.match(/^\d\d:00 {2}/gm) || []).length, 24));
+  // Kept simple on purpose: no prices anywhere in the event text.
+  events.forEach((e) => assert.ok(!/€/.test(e.title + e.description), 'price in ' + e.title));
   // Every event opens with the link to the live page.
   events.forEach((e) => assert.equal(e.description.split('\n')[0], '⚡ Now and tomorrow at a glance: ' + config.pageUrl));
 });
@@ -134,12 +134,11 @@ test('14 Sep 2026: the lone cheap hour at 04:00 is dropped, and the hour list ag
   const plan = core.planDay(day, config);
   const events = text.eventsForPlan(plan, config, source);
   assert.deepEqual(events.map((e) => e.title), [
-    '🔴 Duur · Avoid 06:00–10:00 · €0.42–0.50',
-    '🟢 Goedkoop · Cheap 12:00–17:00 · €0.33–0.35',
-    '🔴 Duur · Avoid 18:00–23:00 · €0.43–0.62',
+    '🔴 Duur · Avoid 06:00–10:00',
+    '🟢 Goedkoop · Cheap 12:00–17:00',
+    '🔴 Duur · Avoid 18:00–23:00',
   ]);
   assert.equal(plan.hours.find((h) => h.label === '04:00').tier, 'normal');
-  assert.match(events[0].description, /^04:00 {2}€0\.36$/m);
 });
 
 test('a single free hour is still shown', () => {
@@ -158,8 +157,8 @@ test('event text: format, 24:00 at day end, curly apostrophes only', () => {
   const plan = core.planDay(core.buildDay('2026-09-15', rows, config.tariff), config);
   const events = text.eventsForPlan(plan, config, 'EnergyZero');
   assert.deepEqual(events.map((e) => e.title), [
-    '🟢 Goedkoop · Cheap 00:00–21:00 · €0.25',
-    '🔴 Duur · Avoid 21:00–24:00 · €0.74',
+    '🟢 Goedkoop · Cheap 00:00–21:00',
+    '🔴 Duur · Avoid 21:00–24:00',
   ]);
   assert.match(events[1].description, /^Avoid starting: dishwasher, washing machine and dryer\.\nStart before 21:00\.$/m);
   events.forEach((e) => assert.ok(!/'/.test(e.title + e.description), 'straight apostrophe in ' + e.title));
@@ -171,16 +170,16 @@ test('flat day: no cheap or expensive events, only the best 3 hours', () => {
   const plan = core.planDay(core.buildDay('2026-12-02', rows, config.tariff), config);
   assert.equal(plan.stats.flat, true);
   const events = text.eventsForPlan(plan, config, 'EnergyZero');
-  assert.deepEqual(events.map((e) => e.title), ['⭐ Beste tijd · Best 3h 03:00–06:00 · €0.23']);
-  assert.match(events[0].description, /^Flat day — prices barely change, so timing matters little\.$/m);
+  assert.deepEqual(events.map((e) => e.title), ['⭐ Beste tijd · Best 3h 03:00–06:00']);
+  assert.match(events[0].description, /^Prices are close all day, so timing matters little\.$/m);
 });
 
-test('free hours: negative market price, title shows what you still pay', () => {
+test('free hours: negative market price becomes a free-power event', () => {
   const start = core.dayRange('2026-05-10').start;
   const rows = Array.from({ length: 24 }, (_, i) => ({ startMs: start + i * HOUR, spotExVat: i >= 12 && i < 15 ? -0.06 : 0.12 }));
   const plan = core.planDay(core.buildDay('2026-05-10', rows, config.tariff), config);
   const free = text.eventsForPlan(plan, config).find((e) => e.kind === 'free');
-  assert.equal(free.title, '🆓 Gratis · Free power 12:00–15:00 · €0.06');
+  assert.equal(free.title, '🆓 Gratis · Free power 12:00–15:00');
   assert.match(free.description, /charge laptops and phones and power banks/);
 });
 

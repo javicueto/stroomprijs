@@ -1,6 +1,7 @@
 /*
- * Stroom — the words: event titles, descriptions and price formatting.
- * Dutch word as a label, the information in English.
+ * Stroom — the words for calendar events: titles and short descriptions.
+ * Dutch word as a label, the information in English. Deliberately simple:
+ * what to do and when — no prices.
  *
  * Single source of truth — edit here in shared/ only.
  */
@@ -19,18 +20,6 @@ var StroomText = (function () {
   };
   const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-  function euro(v) {
-    const r = Math.round(v * 100) / 100;
-    return (r < 0 ? '−' : '') + '€' + Math.abs(r).toFixed(2);
-  }
-
-  function euroRange(a, b) {
-    const lo = euro(a);
-    const hi = euro(b);
-    if (lo === hi) return lo;
-    return a < 0 || b < 0 ? lo + ' to ' + hi : lo + '–' + hi.slice(1);
-  }
 
   // A window ending exactly at the end of dateStr reads "24:00", not "00:00".
   function timeLabel(ms, dateStr) {
@@ -53,46 +42,14 @@ var StroomText = (function () {
     return words.length < 2 ? words.join('') : words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1];
   }
 
+  // "🟢 Goedkoop · Cheap 11:00–16:00" · "⭐ Beste tijd · Best 3h 03:00–06:00"
   function title(kind, block, plan, config) {
     const k = KIND[kind];
-    const when = span(block.startMs, block.endMs, plan.date);
-    if (kind === 'best') {
-      return k.emoji + ' ' + k.nl + ' · ' + k.en + ' ' + config.bestWindowHours + 'h ' + when + ' · ' + euro(block.average);
-    }
-    return k.emoji + ' ' + k.nl + ' · ' + k.en + ' ' + when + ' · ' + euroRange(block.min, block.max);
+    const name = kind === 'best' ? k.en + ' ' + config.bestWindowHours + 'h' : k.en;
+    return k.emoji + ' ' + k.nl + ' · ' + name + ' ' + span(block.startMs, block.endMs, plan.date);
   }
 
-  // "Dishwasher (eco)" + 3h → "Dishwasher (eco, 3h)"; "Dryer" + 2h → "Dryer (2h)".
-  function applianceLabel(appliance) {
-    const name = appliance.name;
-    return name.endsWith(')')
-      ? name.slice(0, -1) + ', ' + appliance.hours + 'h)'
-      : name + ' (' + appliance.hours + 'h)';
-  }
-
-  function costLines(kind, block, plan, config) {
-    const compareWithBest = kind === 'expensive';
-    const lines = [compareWithBest
-      ? 'Cost of one run, started at ' + timeLabel(block.startMs, plan.date) + ' vs. the cheapest start that day:'
-      : 'Cost of one run, started at ' + timeLabel(block.startMs, plan.date) + ' vs. the most expensive start that day:'];
-    plan.appliances.filter((a) => a.appliance.shiftable).forEach((a) => {
-      const here = core().runAt(plan.hours, a.appliance, block.startMs);
-      const other = compareWithBest ? a.best : a.worst;
-      if (!here || !other) return;
-      lines.push('• ' + applianceLabel(a.appliance) + ': ' + euro(here.cost) +
-        ' · ' + euro(other.cost) + ' at ' + timeLabel(other.startMs, plan.date));
-    });
-    return lines;
-  }
-
-  function hourList(plan) {
-    return plan.hours.map((h) => {
-      const k = KIND[h.tier];
-      return h.label + '  ' + euro(h.allIn) + (k ? '  ' + k.emoji : '');
-    });
-  }
-
-  function description(kind, block, plan, config, source) {
+  function description(kind, block, plan, config) {
     const words = joinWords(config.appliances.filter((a) => a.shiftable).map((a) => a.word));
     const extras = joinWords(config.appliances.filter((a) => !a.shiftable).map((a) => a.word));
     const start = timeLabel(block.startMs, plan.date);
@@ -102,8 +59,7 @@ var StroomText = (function () {
     const lines = config.pageUrl ? ['⚡ Now and tomorrow at a glance: ' + config.pageUrl, ''] : [];
 
     if (kind === 'free') {
-      lines.push('The market price is below zero — you only pay energy tax and Eneco’s fee.');
-      lines.push('Good time for: ' + words + '.');
+      lines.push('Free power — good time for: ' + words + '.');
       if (extras) lines.push('Also a good moment to charge ' + extras + ' and power banks.');
     } else if (kind === 'cheap') {
       lines.push('Good time for: ' + words + '.');
@@ -112,34 +68,21 @@ var StroomText = (function () {
       if (start === '00:00') lines.push('Wait until ' + end + '.');
       else if (end === '24:00') lines.push('Start before ' + start + '.');
       else lines.push('Start before ' + start + ', or wait until ' + end + '.');
-      if (plan.best) {
-        lines.push('Cheapest ' + n + ' hours that day: ' + span(plan.best.startMs, plan.best.endMs, plan.date) +
-          ' (' + euro(plan.best.average) + ' per kWh).');
-      }
+      if (plan.best) lines.push('Cheapest ' + n + ' hours that day: ' + span(plan.best.startMs, plan.best.endMs, plan.date) + '.');
     } else if (kind === 'best') {
-      lines.push(plan.stats.flat
-        ? 'Flat day — prices barely change, so timing matters little.'
-        : 'No clearly cheap hours that day.');
+      lines.push(plan.stats.flat ? 'Prices are close all day, so timing matters little.' : 'No clearly cheap hours that day.');
       lines.push('These are the cheapest ' + n + ' hours: good for ' + words + '.');
     }
-
-    lines.push('');
-    lines.push.apply(lines, costLines(kind, block, plan, config));
-    lines.push('');
-    lines.push('Prices ' + dayLabel(plan.date) + ' (€ per kWh, all-in):');
-    lines.push.apply(lines, hourList(plan));
-    lines.push('');
-    lines.push('⚡ Stroom · Eneco Dynamisch · market prices: EPEX day-ahead' + (source ? ' via ' + source : ''));
     return lines.join('\n');
   }
 
-  function eventsForPlan(plan, config, source) {
+  function eventsForPlan(plan, config) {
     const events = plan.windows.map((w) => ({
       kind: w.tier,
       startMs: w.startMs,
       endMs: w.endMs,
       title: title(w.tier, w, plan, config),
-      description: description(w.tier, w, plan, config, source),
+      description: description(w.tier, w, plan, config),
     }));
     if (plan.showBest) {
       events.push({
@@ -147,7 +90,7 @@ var StroomText = (function () {
         startMs: plan.best.startMs,
         endMs: plan.best.endMs,
         title: title('best', plan.best, plan, config),
-        description: description('best', plan.best, plan, config, source),
+        description: description('best', plan.best, plan, config),
       });
     }
     return events.sort((a, b) => a.startMs - b.startMs);
@@ -155,8 +98,6 @@ var StroomText = (function () {
 
   const api = {
     KIND: KIND,
-    euro: euro,
-    euroRange: euroRange,
     timeLabel: timeLabel,
     span: span,
     dayLabel: dayLabel,

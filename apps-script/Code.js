@@ -53,12 +53,43 @@ function runDaily() {
   forgetOldDays_(props, now);
 }
 
+// Private run link (web app). Lets a trusted caller rewrite today or tomorrow
+// without opening the editor. The secret key is never stored in this project:
+// only its SHA-256 hash (STROOM_PRIVATE.runTokenSha256). The response is a
+// status line only — never event contents.
+function doGet(e) {
+  const params = (e && e.parameter) || {};
+  if (!STROOM_PRIVATE.runTokenSha256 || sha256Hex_(params.token || '') !== STROOM_PRIVATE.runTokenSha256) {
+    return text_('forbidden');
+  }
+  const today = StroomCore.todayLocal(Date.now());
+  const target = { rewriteToday: today, rewriteTomorrow: StroomCore.addDays(today, 1) }[params.fn];
+  if (!target) return text_('unknown fn');
+  try {
+    const result = writeDay_(target);
+    return text_(result.written ? 'ok ' + target + ' ' + result.events.length + ' events' : 'no prices for ' + target);
+  } catch (err) {
+    console.error(err);
+    return text_('error: ' + err.message);
+  }
+}
+
+function sha256Hex_(value) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value, Utilities.Charset.UTF_8)
+    .map((b) => ((b + 256) % 256).toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function text_(message) {
+  return ContentService.createTextOutput(message);
+}
+
 function writeDay_(dateStr) {
   const loaded = StroomFeeds.loadDaySync(dateStr, fetchJson_, STROOM_CONFIG.tariff);
   if (!loaded.day) return { written: false, date: dateStr, notes: loaded.notes };
 
   const plan = StroomCore.planDay(loaded.day, STROOM_CONFIG);
-  const events = StroomText.eventsForPlan(plan, STROOM_CONFIG, loaded.source);
+  const events = StroomText.eventsForPlan(plan, STROOM_CONFIG);
   const calendarId = calendarId_();
 
   // Insert the new set first, then remove the old one. If an insert fails,
