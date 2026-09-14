@@ -1,7 +1,17 @@
 # ⚡ Stroom
 
 Cheap, free and expensive electricity hours for an Eneco Dynamisch contract —
-in a shared Google Calendar, and (soon) on a phone-friendly page.
+in a shared Google Calendar, and on a phone page:
+**https://javicueto.github.io/stroomprijs/**
+
+## Put the page on your phone’s home screen
+
+- **iPhone (Safari):** open the link → Share button → **Add to Home Screen**.
+- **Android (Chrome):** open the link → ⋮ menu → **Add to Home screen**.
+
+It opens like an app, shows the price now, the best time to start the
+dishwasher, washer and dryer, and today’s and tomorrow’s hours. It still shows
+the last prices it loaded when you’re offline.
 
 Every afternoon a Google Apps Script reads tomorrow’s market prices, applies
 Eneco’s formula and writes events like:
