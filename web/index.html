@@ -27,6 +27,62 @@
       </div>
     </header>
 
+    <!-- Icons: Font Awesome Pro 7.2.0 Classic Regular by @fontawesome - https://fontawesome.com
+         License - https://fontawesome.com/license (Commercial License). Inline so they work offline. -->
+    <div class="install-banner" id="install-banner" hidden>
+      <button type="button" class="install-open" id="install-open">
+        <svg class="icon" viewBox="0 0 640 640" aria-hidden="true" focusable="false"><path d="M192 512C192 520.8 199.2 528 208 528L432 528C440.8 528 448 520.8 448 512L448 400L192 400L192 512zM192 352L448 352L448 128C448 119.2 440.8 112 432 112L208 112C199.2 112 192 119.2 192 128L192 352zM144 128C144 92.7 172.7 64 208 64L432 64C467.3 64 496 92.7 496 128L496 512C496 547.3 467.3 576 432 576L208 576C172.7 576 144 547.3 144 512L144 128zM320 496C302.3 496 288 481.7 288 464C288 446.3 302.3 432 320 432C337.7 432 352 446.3 352 464C352 481.7 337.7 496 320 496z"/></svg>
+        <span class="install-text"><strong>Add Stroom to your home screen</strong><span class="install-sub">Opens like an app · see how</span></span>
+      </button>
+      <button type="button" class="install-dismiss" id="install-dismiss" aria-label="Hide this for good">
+        <svg class="icon" viewBox="0 0 640 640" aria-hidden="true" focusable="false"><path d="M135.5 169C126.1 159.6 126.1 144.4 135.5 135.1C144.9 125.8 160.1 125.7 169.4 135.1L320.4 286.1L471.4 135.1C480.8 125.7 496 125.7 505.3 135.1C514.6 144.5 514.7 159.7 505.3 169L354.3 320L505.3 471C514.7 480.4 514.7 495.6 505.3 504.9C495.9 514.2 480.7 514.3 471.4 504.9L320.4 353.9L169.4 504.9C160 514.3 144.8 514.3 135.5 504.9C126.2 495.5 126.1 480.3 135.5 471L286.5 320L135.5 169z"/></svg>
+      </button>
+    </div>
+
+    <dialog class="install-dialog" id="install-dialog" aria-labelledby="install-title">
+      <form method="dialog" class="install-card">
+        <header class="install-head">
+          <h2 id="install-title">Add Stroom to your home screen</h2>
+          <button class="install-close" value="close" aria-label="Close">
+            <svg class="icon" viewBox="0 0 640 640" aria-hidden="true" focusable="false"><path d="M135.5 169C126.1 159.6 126.1 144.4 135.5 135.1C144.9 125.8 160.1 125.7 169.4 135.1L320.4 286.1L471.4 135.1C480.8 125.7 496 125.7 505.3 135.1C514.6 144.5 514.7 159.7 505.3 169L354.3 320L505.3 471C514.7 480.4 514.7 495.6 505.3 504.9C495.9 514.2 480.7 514.3 471.4 504.9L320.4 353.9L169.4 504.9C160 514.3 144.8 514.3 135.5 504.9C126.2 495.5 126.1 480.3 135.5 471L286.5 320L135.5 169z"/></svg>
+          </button>
+        </header>
+        <p class="install-lead">It opens full screen like an app, and still shows the last prices when you’re offline.</p>
+
+        <section class="install-steps" data-platform="ios">
+          <h3>iPhone</h3>
+          <ol>
+            <li>Tap
+              <span class="ui-key"><svg class="icon" viewBox="0 0 640 640" aria-hidden="true" focusable="false"><path d="M337 71C327.6 61.6 312.4 61.6 303.1 71L167 207C157.6 216.4 157.6 231.6 167 240.9C176.4 250.2 191.6 250.3 200.9 240.9L295.9 145.9L295.9 392C295.9 405.3 306.6 416 319.9 416C333.2 416 343.9 405.3 343.9 392L343.9 145.9L438.9 240.9C448.3 250.3 463.5 250.3 472.8 240.9C482.1 231.5 482.2 216.3 472.8 207L337 71zM144 408C144 394.7 133.3 384 120 384C106.7 384 96 394.7 96 408L96 480C96 533 139 576 192 576L448 576C501 576 544 533 544 480L544 408C544 394.7 533.3 384 520 384C506.7 384 496 394.7 496 408L496 480C496 506.5 474.5 528 448 528L192 528C165.5 528 144 506.5 144 480L144 408z"/></svg>Share</span>
+              in Safari’s toolbar. If you don’t see it, tap
+              <span class="ui-key"><svg class="icon" viewBox="0 0 640 640" aria-hidden="true" focusable="false"><path d="M368 144C368 170.5 346.5 192 320 192C293.5 192 272 170.5 272 144C272 117.5 293.5 96 320 96C346.5 96 368 117.5 368 144zM272 320C272 293.5 293.5 272 320 272C346.5 272 368 293.5 368 320C368 346.5 346.5 368 320 368C293.5 368 272 346.5 272 320zM368 496C368 522.5 346.5 544 320 544C293.5 544 272 522.5 272 496C272 469.5 293.5 448 320 448C346.5 448 368 469.5 368 496z" transform="rotate(90 320 320)"/></svg>More</span>
+              first.</li>
+            <li>Tap
+              <span class="ui-key"><svg class="icon" viewBox="0 0 640 640" aria-hidden="true" focusable="false"><path d="M160 144C151.2 144 144 151.2 144 160L144 480C144 488.8 151.2 496 160 496L480 496C488.8 496 496 488.8 496 480L496 160C496 151.2 488.8 144 480 144L160 144zM96 160C96 124.7 124.7 96 160 96L480 96C515.3 96 544 124.7 544 160L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 160zM296 408L296 344L232 344C218.7 344 208 333.3 208 320C208 306.7 218.7 296 232 296L296 296L296 232C296 218.7 306.7 208 320 208C333.3 208 344 218.7 344 232L344 296L408 296C421.3 296 432 306.7 432 320C432 333.3 421.3 344 408 344L344 344L344 408C344 421.3 333.3 432 320 432C306.7 432 296 421.3 296 408z"/></svg>Add to Home Screen</span>
+              — scroll down the list if needed.</li>
+            <li>Tap <strong>Add</strong>.</li>
+          </ol>
+        </section>
+
+        <section class="install-steps" data-platform="android">
+          <h3>Android</h3>
+          <button type="button" class="install-native" id="install-native" hidden>Install Stroom</button>
+          <ol>
+            <li>Tap
+              <span class="ui-key"><svg class="icon" viewBox="0 0 640 640" aria-hidden="true" focusable="false"><path d="M368 144C368 170.5 346.5 192 320 192C293.5 192 272 170.5 272 144C272 117.5 293.5 96 320 96C346.5 96 368 117.5 368 144zM272 320C272 293.5 293.5 272 320 272C346.5 272 368 293.5 368 320C368 346.5 346.5 368 320 368C293.5 368 272 346.5 272 320zM368 496C368 522.5 346.5 544 320 544C293.5 544 272 522.5 272 496C272 469.5 293.5 448 320 448C346.5 448 368 469.5 368 496z"/></svg>Menu</span>
+              at the top right of Chrome.</li>
+            <li>Tap <strong>Add to Home screen</strong> or <strong>Install app</strong>.</li>
+            <li>Tap <strong>Install</strong>.</li>
+          </ol>
+        </section>
+
+        <footer class="install-foot">
+          <button type="button" class="link-button" id="install-already">Already added? Hide this for good</button>
+          <button class="primary-button" value="ok">Got it</button>
+        </footer>
+      </form>
+    </dialog>
+
     <section class="hero" id="hero" aria-live="polite" aria-label="Electricity now"></section>
 
     <section class="keys" id="keys" aria-label="Next cheap and expensive hours, and tomorrow"></section>

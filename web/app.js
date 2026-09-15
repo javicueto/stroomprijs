@@ -201,23 +201,13 @@
   }
 
   // ---- Haptics -------------------------------------------------------------
-  // iPhone Safari has no vibration API. Since iOS 18, toggling a native
-  // <input type="checkbox" switch> plays the system haptic tick, so clicking a
-  // hidden one is the only way a web page can make an iPhone tick. Android uses
-  // navigator.vibrate. Elsewhere this silently does nothing.
-  let hapticLabel = null;
-
+  // Android: one short vibration per hour step while dragging.
+  // iPhone: deliberately nothing. Safari has no vibration API, and iOS 26.5
+  // closed the hidden-switch workaround web pages used — on current iOS only a
+  // finger physically tapping a switch gives a single tick, never during a
+  // drag. Do not re-add that workaround; it no longer does anything.
   function haptic() {
-    if (typeof navigator.vibrate === 'function' && /Android/i.test(navigator.userAgent)) {
-      navigator.vibrate(8);
-      return;
-    }
-    if (!hapticLabel) {
-      hapticLabel = h('label', { class: 'haptic-switch', 'aria-hidden': 'true' },
-        h('input', { type: 'checkbox', switch: true, tabindex: '-1' }));
-      document.body.append(hapticLabel);
-    }
-    hapticLabel.click();
+    if (typeof navigator.vibrate === 'function') navigator.vibrate(8);
   }
 
   // ---- Verdict -------------------------------------------------------------
@@ -309,27 +299,29 @@
     return T.dayLabel(date).split(' ').slice(0, 2).join(' ');
   }
 
-  // Places time labels in two rows under the strip, centred on their block
-  // edge. Day names win over times, then earlier labels; a label that fits in
-  // neither row is hidden rather than drawn over another.
+  // Places time labels under the strip, centred on their block edge. A label
+  // that would touch another drops to the next row down — as many rows as it
+  // takes — so every time stays visible and none overlap. Never above the
+  // strip: that is where the "Now" tag moves. Day names are placed first.
+  // Returns the number of rows used.
   function layoutLabels(container) {
     const width = container.clientWidth;
-    const rows = [[], []];
+    const rows = [];
     Array.prototype.slice.call(container.children)
       .sort((p, q) => (p.dataset.rank - q.dataset.rank) || (p.dataset.at - q.dataset.at))
       .forEach((el) => {
-        el.hidden = false;
         const w = el.getBoundingClientRect().width;
         const left = Math.min(Math.max(el.dataset.at * width - w / 2, 0), width - w);
-        const row = rows.findIndex((r) => r.every((iv) => left + w + 6 <= iv[0] || left >= iv[1] + 6));
+        let row = rows.findIndex((r) => r.every((iv) => left + w + 6 <= iv[0] || left >= iv[1] + 6));
         if (row < 0) {
-          el.hidden = true;
-          return;
+          rows.push([]);
+          row = rows.length - 1;
         }
         rows[row].push([left, left + w]);
         el.style.left = left + 'px';
         el.style.top = row * 18 + 'px';
       });
+    return Math.max(rows.length, 1);
   }
 
   function renderStrip(hoursAll, now, d) {
@@ -480,7 +472,8 @@
     bar.querySelectorAll('.strip-run-label').forEach((el) => {
       el.hidden = el.getBoundingClientRect().width > el.parentElement.clientWidth - 6;
     });
-    layoutLabels(labels);
+    // The label area and the marker line grow with the number of rows used.
+    strip.style.setProperty('--label-rows', String(layoutLabels(labels)));
   }
 
   // ---- Footer --------------------------------------------------------------
@@ -498,6 +491,79 @@
       h('p', {}, 'Eneco Dynamisch · market prices' + (source ? ' via ' + source : '') +
         (state.checkedAt ? ' · checked ' + clock(state.checkedAt) : '')),
     ].forEach((node) => { if (node) f.append(node); });
+  }
+
+  // ---- Add to home screen ----------------------------------------------------
+  // Banner on phones only, never inside the installed app, and never again once
+  // hidden. Android Chrome can install in one tap (beforeinstallprompt).
+
+  const INSTALL_KEY = 'installBanner';
+  // Android is checked first: the iPad test ("Mac with a touch screen") also
+  // matches Android phones emulated on a Mac, and a UA that says Android is
+  // never an iPad.
+  const PLATFORM = /Android/i.test(navigator.userAgent)
+    ? 'android'
+    : /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      ? 'ios'
+      : 'other';
+  let installPrompt = null;
+
+  function isInstalledApp() {
+    return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  }
+
+  function setupInstall() {
+    const banner = byId('install-banner');
+    const dialog = byId('install-dialog');
+    const nativeButton = byId('install-native');
+
+    const shouldShow = () => !isInstalledApp() &&
+      readStore(INSTALL_KEY) !== 'dismissed' &&
+      (PLATFORM !== 'other' || !!installPrompt);
+    const updateBanner = () => { banner.hidden = !shouldShow(); };
+    const hideForGood = () => {
+      writeStore(INSTALL_KEY, 'dismissed');
+      updateBanner();
+    };
+    const closeDialog = () => { if (dialog.open) dialog.close(); };
+
+    // Only the steps for this phone; both when we can't tell.
+    dialog.querySelectorAll('[data-platform]').forEach((section) => {
+      section.hidden = PLATFORM !== 'other' && section.dataset.platform !== PLATFORM;
+    });
+
+    byId('install-open').addEventListener('click', () => dialog.showModal());
+    byId('install-dismiss').addEventListener('click', hideForGood);
+    byId('install-already').addEventListener('click', () => {
+      hideForGood();
+      closeDialog();
+    });
+    // A tap on the dimmed backdrop closes the pop-up.
+    dialog.addEventListener('click', (e) => { if (e.target === dialog) closeDialog(); });
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      installPrompt = e;
+      nativeButton.hidden = false;
+      updateBanner();
+    });
+    nativeButton.addEventListener('click', async () => {
+      if (!installPrompt) return;
+      installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      installPrompt = null;
+      nativeButton.hidden = true;
+      if (choice.outcome === 'accepted') {
+        hideForGood();
+        closeDialog();
+      }
+    });
+    window.addEventListener('appinstalled', () => {
+      hideForGood();
+      closeDialog();
+    });
+
+    updateBanner();
   }
 
   // ---- Render loop ---------------------------------------------------------
@@ -535,6 +601,7 @@
   }
 
   loadSaved();
+  setupInstall();
   state.hour12 = readStore('hour12') === true;
   document.querySelectorAll('#clock-toggle button').forEach((b) => {
     b.addEventListener('click', () => {

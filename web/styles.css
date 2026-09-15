@@ -222,7 +222,7 @@ h2, p { margin: 0; }
 .strip-now {
   position: absolute;
   top: 26px;
-  bottom: 42px;
+  bottom: calc(var(--label-rows, 2) * 18px + 6px);
   border-left: 2px solid var(--ink);
   pointer-events: none;
 }
@@ -252,8 +252,8 @@ h2, p { margin: 0; }
   white-space: nowrap;
 }
 .strip-now-tag .swatch { box-shadow: 0 0 0 1px var(--surface); }
-/* Two rows of block-edge times; positions are set in app.js once widths are known. */
-.strip-labels { position: relative; height: 36px; margin-top: 6px; }
+/* Block-edge times; app.js places each one and sets --label-rows to the rows used. */
+.strip-labels { position: relative; height: calc(var(--label-rows, 2) * 18px); margin-top: 6px; }
 .strip-label {
   position: absolute;
   top: 0;
@@ -264,19 +264,6 @@ h2, p { margin: 0; }
   font-variant-numeric: tabular-nums;
 }
 .strip-label.is-day { color: var(--ink); font-weight: 650; }
-
-/* Hidden native switch used only to trigger the iPhone haptic tick. Not
-   display:none — a hidden-from-layout control would not toggle. */
-.haptic-switch {
-  position: fixed;
-  left: -100px;
-  top: 0;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
 
 .legend {
   display: flex;
@@ -295,6 +282,123 @@ h2, p { margin: 0; }
 .tier-cheap { background: var(--tier-cheap); }
 .tier-normal { background: var(--tier-normal); }
 .tier-expensive { background: var(--tier-expensive); }
+
+/* ---- Add to home screen: banner + instructions ---- */
+
+.icon { flex: none; width: 1.1em; height: 1.1em; fill: currentColor; vertical-align: -0.15em; }
+
+.install-banner {
+  display: flex;
+  align-items: stretch;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.install-open {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.install-open .icon { width: 1.5rem; height: 1.5rem; }
+.install-text { display: grid; }
+.install-text strong { font-weight: 650; }
+.install-sub { color: var(--ink-2); font-size: 0.875rem; }
+.install-dismiss {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.install-open:focus-visible,
+.install-dismiss:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+
+.install-dialog {
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.install-dialog::backdrop { background: rgb(0 0 0 / 0.55); }
+.install-card { display: grid; gap: var(--space-4); margin: 0; padding: var(--space-5); }
+.install-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.install-head h2 { font-size: 1.25rem; font-weight: 700; line-height: 1.25; }
+.install-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: -8px -8px 0 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.install-lead { color: var(--ink-2); }
+.install-steps { display: grid; gap: var(--space-2); }
+/* No uppercase here: it would print "IPHONE". */
+.install-steps h3 { margin: 0; font-size: 1rem; font-weight: 700; }
+.install-steps ol { display: grid; gap: var(--space-3); margin: 0; padding-left: 1.25rem; line-height: 1.7; }
+/* "ui-key", not "key": .key is the Next cheap / Next expensive tile. */
+.ui-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--page);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.install-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+.link-button {
+  padding: var(--space-2) 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.875rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.primary-button,
+.install-native {
+  min-height: 44px;
+  padding: 0 var(--space-5);
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--surface);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.install-native { justify-self: start; background: var(--hero-cheap); color: #ffffff; }
 
 /* ---- Footer ---- */
 
