@@ -187,7 +187,17 @@ h2, p { margin: 0; }
   background: var(--surface);
 }
 .section-label { color: var(--ink-2); font-size: 0.875rem; font-weight: 550; }
-.strip { position: relative; padding-top: 34px; }
+.hint { font-weight: 400; }
+/* pan-y: a vertical swipe still scrolls the page; a sideways drag moves the marker. */
+.strip {
+  position: relative;
+  padding-top: 34px;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: grab;
+}
+.strip:active { cursor: grabbing; }
 .strip-bar { display: flex; gap: 2px; height: 48px; }
 .strip-run {
   display: flex;
@@ -212,9 +222,19 @@ h2, p { margin: 0; }
 .strip-now {
   position: absolute;
   top: 26px;
-  bottom: 22px;
+  bottom: 42px;
   border-left: 2px solid var(--ink);
   pointer-events: none;
+}
+.strip-now.is-animated { transition: left 0.25s ease; }
+.strip-now:focus-visible { outline: none; }
+.strip-now:focus-visible .strip-now-tag { outline: 2px solid var(--ink); outline-offset: 2px; }
+.strip-now.flip .strip-now-tag { left: auto; right: -2px; }
+/* While looking ahead the tag turns outlined, so it never passes for "now". */
+.strip-now.is-scrubbed .strip-now-tag {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 2px var(--ink);
 }
 .strip-now-tag {
   position: absolute;
@@ -232,9 +252,31 @@ h2, p { margin: 0; }
   white-space: nowrap;
 }
 .strip-now-tag .swatch { box-shadow: 0 0 0 1px var(--surface); }
-.strip-labels { position: relative; height: 18px; margin-top: 4px; }
-.strip-label { position: absolute; font-size: 0.75rem; color: var(--ink-2); white-space: nowrap; }
+/* Two rows of block-edge times; positions are set in app.js once widths are known. */
+.strip-labels { position: relative; height: 36px; margin-top: 6px; }
+.strip-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 0.75rem;
+  color: var(--ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 .strip-label.is-day { color: var(--ink); font-weight: 650; }
+
+/* Hidden native switch used only to trigger the iPhone haptic tick. Not
+   display:none — a hidden-from-layout control would not toggle. */
+.haptic-switch {
+  position: fixed;
+  left: -100px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
 
 .legend {
   display: flex;

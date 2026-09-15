@@ -200,6 +200,26 @@
     return { endMs: hours[j].endMs, known: j + 1 < hours.length };
   }
 
+  // ---- Haptics -------------------------------------------------------------
+  // iPhone Safari has no vibration API. Since iOS 18, toggling a native
+  // <input type="checkbox" switch> plays the system haptic tick, so clicking a
+  // hidden one is the only way a web page can make an iPhone tick. Android uses
+  // navigator.vibrate. Elsewhere this silently does nothing.
+  let hapticLabel = null;
+
+  function haptic() {
+    if (typeof navigator.vibrate === 'function' && /Android/i.test(navigator.userAgent)) {
+      navigator.vibrate(8);
+      return;
+    }
+    if (!hapticLabel) {
+      hapticLabel = h('label', { class: 'haptic-switch', 'aria-hidden': 'true' },
+        h('input', { type: 'checkbox', switch: true, tabindex: '-1' }));
+      document.body.append(hapticLabel);
+    }
+    hapticLabel.click();
+  }
+
   // ---- Verdict -------------------------------------------------------------
 
   function renderHero(o, hours, d) {
@@ -278,7 +298,39 @@
     );
   }
 
-  // ---- Strip: now → end of tomorrow ----------------------------------------
+  // ---- Timeline strip: now → end of tomorrow --------------------------------
+  // Every block with its word, the time at both ends of each block, and a
+  // marker that can be dragged hour by hour to look ahead.
+
+  const scrub = { holding: false, active: false, pendingRender: false, returnTimer: null };
+  const SCRUB_RETURN_MS = 4000;
+
+  function stripDay(date) {
+    return T.dayLabel(date).split(' ').slice(0, 2).join(' ');
+  }
+
+  // Places time labels in two rows under the strip, centred on their block
+  // edge. Day names win over times, then earlier labels; a label that fits in
+  // neither row is hidden rather than drawn over another.
+  function layoutLabels(container) {
+    const width = container.clientWidth;
+    const rows = [[], []];
+    Array.prototype.slice.call(container.children)
+      .sort((p, q) => (p.dataset.rank - q.dataset.rank) || (p.dataset.at - q.dataset.at))
+      .forEach((el) => {
+        el.hidden = false;
+        const w = el.getBoundingClientRect().width;
+        const left = Math.min(Math.max(el.dataset.at * width - w / 2, 0), width - w);
+        const row = rows.findIndex((r) => r.every((iv) => left + w + 6 <= iv[0] || left >= iv[1] + 6));
+        if (row < 0) {
+          el.hidden = true;
+          return;
+        }
+        rows[row].push([left, left + w]);
+        el.style.left = left + 'px';
+        el.style.top = row * 18 + 'px';
+      });
+  }
 
   function renderStrip(hoursAll, now, d) {
     const box = byId('strip');
@@ -288,9 +340,9 @@
       box.append(h('p', { class: 'muted' }, state.loading ? 'Loading…' : 'No prices yet.'));
       return;
     }
-    const start = hours[0].startMs;
-    const span = hours[hours.length - 1].endMs - start;
-    const frac = (ms) => ((ms - start) / span) * 100;
+    const startMs = hours[0].startMs;
+    const endMs = hours[hours.length - 1].endMs;
+    const frac = (ms) => (ms - startMs) / (endMs - startMs);
 
     const runs = [];
     hours.forEach((x) => {
@@ -299,42 +351,136 @@
       else runs.push({ tier: x.tier, startMs: x.startMs, endMs: x.endMs });
     });
 
-    const labels = h('div', { class: 'strip-labels', 'aria-hidden': 'true' });
-    hours.forEach((x) => {
-      const left = frac(x.startMs);
-      if (x.hour % 6 !== 0 || left > 94) return;
-      labels.append(h('span', { class: 'strip-label' + (x.hour === 0 ? ' is-day' : ''), style: 'left:' + left + '%' },
-        x.hour === 0 ? T.dayLabel(x.date).split(' ').slice(0, 2).join(' ') : (state.hour12 ? fmt(x.hour, 0) : C.pad(x.hour))));
-    });
-
-    // The strip always starts at the current hour, so the first run is "now".
-    const current = runs[0];
     const bar = h('div', {
       class: 'strip-bar',
       role: 'img',
-      'aria-label': 'Now ' + NAMES[current.tier][2] + '. ' +
-        runs.map((r) => NAMES[r.tier][2] + ' until ' + at(r.endMs, d)).join(', '),
+      'aria-label': runs.map((r) => NAMES[r.tier][2] + ' until ' + at(r.endMs, d)).join(', '),
     }, runs.map((r) => h('span', { class: 'strip-run tier-' + r.tier, style: 'flex-grow:' + (r.endMs - r.startMs) / C.HOUR },
       h('span', { class: 'strip-run-label' }, NAMES[r.tier][2]))));
 
-    const present = ['free', 'cheap', 'normal', 'expensive'].filter((t) => runs.some((r) => r.tier === t));
-    box.append(
-      h('div', { class: 'strip' },
-        h('span', { class: 'strip-now', style: 'left:' + frac(now) + '%', 'aria-hidden': 'true' },
-          h('span', { class: 'strip-now-tag' },
-            h('span', { class: 'swatch tier-' + current.tier }), 'Now ' + clock(now) + ' · ' + NAMES[current.tier][2])),
-        bar,
-        labels),
-      h('ul', { class: 'legend' }, present.map((t) =>
-        h('li', {}, h('span', { class: 'swatch tier-' + t, 'aria-hidden': 'true' }), NAMES[t][2])))
-    );
-
-    // A word goes inside a block only when it fits — a clipped word is worse than none.
-    requestAnimationFrame(() => {
-      bar.querySelectorAll('.strip-run-label').forEach((label) => {
-        label.hidden = label.getBoundingClientRect().width > label.parentElement.clientWidth - 6;
-      });
+    // Time at both ends of every block (a shared edge is labelled once), and
+    // the day name at midnight.
+    const labels = h('div', { class: 'strip-labels', 'aria-hidden': 'true' });
+    const label = (ms, text, rank, extra) =>
+      h('span', { class: 'strip-label' + (extra || ''), 'data-at': frac(ms), 'data-rank': rank }, text);
+    hours.forEach((x) => {
+      if (x.hour === 0 && x.startMs > startMs) labels.append(label(x.startMs, stripDay(x.date), 0, ' is-day'));
     });
+    labels.append(label(startMs, timeOf(startMs), 1));
+    runs.forEach((r, i) => {
+      const isLast = i === runs.length - 1;
+      labels.append(label(r.endMs, isLast ? timeOf(r.endMs, hours[hours.length - 1].date) : timeOf(r.endMs), 1));
+    });
+
+    const tagSwatch = h('span', { class: 'swatch' });
+    const tagText = h('span', {});
+    const marker = h('div', {
+      class: 'strip-now',
+      role: 'slider',
+      tabindex: '0',
+      'aria-label': 'Look ahead on the timeline',
+      'aria-valuemin': '0',
+      'aria-valuemax': String(hours.length - 1),
+    }, h('span', { class: 'strip-now-tag' }, tagSwatch, tagText));
+
+    const strip = h('div', { class: 'strip' }, marker, bar, labels);
+    const present = ['free', 'cheap', 'normal', 'expensive'].filter((t) => runs.some((r) => r.tier === t));
+    box.append(strip, h('ul', { class: 'legend' }, present.map((t) =>
+      h('li', {}, h('span', { class: 'swatch tier-' + t, 'aria-hidden': 'true' }), NAMES[t][2]))));
+
+    let index = 0;
+    const place = (i, animate) => {
+      const hr = hours[i];
+      const isNow = i === 0;
+      const f = frac(isNow ? now : hr.startMs);
+      marker.classList.toggle('is-animated', !!animate);
+      marker.classList.toggle('is-scrubbed', !isNow);
+      marker.classList.toggle('flip', f > 0.6);
+      marker.style.left = f * 100 + '%';
+      tagSwatch.className = 'swatch tier-' + hr.tier;
+      const when = isNow
+        ? 'Now ' + clock(now)
+        : (hr.date === d.today ? '' : stripDay(hr.date).split(' ')[0] + ' ') + timeOf(hr.startMs);
+      tagText.textContent = when + ' · ' + NAMES[hr.tier][2];
+      marker.setAttribute('aria-valuenow', String(i));
+      marker.setAttribute('aria-valuetext', tagText.textContent);
+    };
+
+    // One haptic tick per hour step — the "dented" feel.
+    const go = (i) => {
+      const next = Math.min(Math.max(i, 0), hours.length - 1);
+      if (next === index) return;
+      index = next;
+      place(index, false);
+      haptic();
+    };
+
+    const hold = () => {
+      scrub.holding = true;
+      clearTimeout(scrub.returnTimer);
+    };
+
+    // After letting go the marker stays a moment so the time can be read,
+    // then glides back to now and any redraw that waited is done.
+    const letGo = () => {
+      clearTimeout(scrub.returnTimer);
+      scrub.returnTimer = setTimeout(() => {
+        index = 0;
+        place(0, true);
+        scrub.holding = false;
+        if (scrub.pendingRender) {
+          scrub.pendingRender = false;
+          setTimeout(render, 300);
+        }
+      }, SCRUB_RETURN_MS);
+    };
+
+    const indexAt = (clientX) => {
+      const rect = bar.getBoundingClientRect();
+      const f = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 0.9999);
+      return Math.floor(f * hours.length);
+    };
+
+    strip.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      hold();
+      scrub.active = true;
+      try { strip.setPointerCapture(e.pointerId); } catch (err) { /* synthetic events have no capture */ }
+      go(indexAt(e.clientX));
+    });
+    strip.addEventListener('pointermove', (e) => {
+      if (scrub.active) go(indexAt(e.clientX));
+    });
+    const stop = () => {
+      if (!scrub.active) return;
+      scrub.active = false;
+      letGo();
+    };
+    strip.addEventListener('pointerup', stop);
+    strip.addEventListener('pointercancel', stop);
+    strip.addEventListener('lostpointercapture', stop);
+
+    marker.addEventListener('keydown', (e) => {
+      const next = {
+        ArrowRight: index + 1, ArrowUp: index + 1, ArrowLeft: index - 1, ArrowDown: index - 1, Home: 0, End: hours.length - 1,
+      }[e.key];
+      if (next == null) return;
+      e.preventDefault();
+      hold();
+      go(next);
+      letGo();
+    });
+
+    place(0, false);
+
+    // Words inside blocks and times under them are placed right away: the strip
+    // is already in the page, so reading a width forces layout. Waiting for an
+    // animation frame left every time stacked at the left edge in background
+    // tabs, where frames do not run.
+    bar.querySelectorAll('.strip-run-label').forEach((el) => {
+      el.hidden = el.getBoundingClientRect().width > el.parentElement.clientWidth - 6;
+    });
+    layoutLabels(labels);
   }
 
   // ---- Footer --------------------------------------------------------------
@@ -357,6 +503,11 @@
   // ---- Render loop ---------------------------------------------------------
 
   function render() {
+    // Rebuilding the page mid-drag would yank the marker away; catch up after.
+    if (scrub.holding) {
+      scrub.pendingRender = true;
+      return;
+    }
     const now = Date.now();
     const d = dates(now);
     if (!dayFor(d.today) && !inflight && !state.problems[d.today]) refresh();
