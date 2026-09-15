@@ -293,25 +293,34 @@
   // marker that can be dragged hour by hour to look ahead.
 
   const scrub = { holding: false, active: false, pendingRender: false, returnTimer: null };
+  let stripObserver = null;   // watches the current strip's width; replaced on every render
   const SCRUB_RETURN_MS = 4000;
 
   function stripDay(date) {
     return T.dayLabel(date).split(' ').slice(0, 2).join(' ');
   }
 
-  // Places time labels under the strip, centred on their block edge. A label
-  // that would touch another drops to the next row down — as many rows as it
-  // takes — so every time stays visible and none overlap. Never above the
-  // strip: that is where the "Now" tag moves. Day names are placed first.
-  // Returns the number of rows used.
+  // Places time labels under the strip at their block edge (data-px), starting
+  // there (left) or ending there (right). A label that would touch another
+  // drops to the next row down — as many rows as it takes — so every time
+  // stays visible and none overlap. Never above the strip: that is where the
+  // "Now" tag moves. Day names are placed first. Returns the rows used.
   function layoutLabels(container) {
     const width = container.clientWidth;
+    // A time for a short last block ("22:00" on a 19px block) cannot start at
+    // its edge and still end inside the strip. It may run into the card's right
+    // padding (16px on phones, 32px wider), keeping 2px clear of the card edge,
+    // so it still starts at its block instead of under the previous one.
+    const card = container.closest('.strip-card');
+    const overhang = card ? Math.max(0, parseFloat(getComputedStyle(card).paddingRight) - 2) : 0;
     const rows = [];
     Array.prototype.slice.call(container.children)
-      .sort((p, q) => (p.dataset.rank - q.dataset.rank) || (p.dataset.at - q.dataset.at))
+      .sort((p, q) => (p.dataset.rank - q.dataset.rank) || (p.dataset.px - q.dataset.px))
       .forEach((el) => {
         const w = el.getBoundingClientRect().width;
-        const left = Math.min(Math.max(el.dataset.at * width - w / 2, 0), width - w);
+        const px = Number(el.dataset.px);
+        const maxLeft = width - w + (el.dataset.align === 'left' ? overhang : 0);
+        const left = Math.min(Math.max(el.dataset.align === 'right' ? px - w : px, 0), maxLeft);
         let row = rows.findIndex((r) => r.every((iv) => left + w + 6 <= iv[0] || left >= iv[1] + 6));
         if (row < 0) {
           rows.push([]);
@@ -334,7 +343,6 @@
     }
     const startMs = hours[0].startMs;
     const endMs = hours[hours.length - 1].endMs;
-    const frac = (ms) => (ms - startMs) / (endMs - startMs);
 
     const runs = [];
     hours.forEach((x) => {
@@ -353,16 +361,16 @@
     // Time at both ends of every block (a shared edge is labelled once), and
     // the day name at midnight.
     const labels = h('div', { class: 'strip-labels', 'aria-hidden': 'true' });
-    const label = (ms, text, rank, extra) =>
-      h('span', { class: 'strip-label' + (extra || ''), 'data-at': frac(ms), 'data-rank': rank }, text);
+    // Each time starts at the left edge of the block it opens; the final time
+    // ends at the right edge of the last block. Pixel positions are filled in
+    // once the blocks are on the page (see xOf below).
+    const label = (ms, text, rank, align, extra) =>
+      h('span', { class: 'strip-label' + (extra || ''), 'data-ms': ms, 'data-align': align, 'data-rank': rank }, text);
     hours.forEach((x) => {
-      if (x.hour === 0 && x.startMs > startMs) labels.append(label(x.startMs, stripDay(x.date), 0, ' is-day'));
+      if (x.hour === 0 && x.startMs > startMs) labels.append(label(x.startMs, stripDay(x.date), 0, 'left', ' is-day'));
     });
-    labels.append(label(startMs, timeOf(startMs), 1));
-    runs.forEach((r, i) => {
-      const isLast = i === runs.length - 1;
-      labels.append(label(r.endMs, isLast ? timeOf(r.endMs, hours[hours.length - 1].date) : timeOf(r.endMs), 1));
-    });
+    runs.forEach((r) => labels.append(label(r.startMs, timeOf(r.startMs), 1, 'left')));
+    labels.append(label(endMs, timeOf(endMs, hours[hours.length - 1].date), 1, 'right'));
 
     const tagSwatch = h('span', { class: 'swatch' });
     const tagText = h('span', {});
@@ -380,15 +388,36 @@
     box.append(strip, h('ul', { class: 'legend' }, present.map((t) =>
       h('li', {}, h('span', { class: 'swatch tier-' + t, 'aria-hidden': 'true' }), NAMES[t][2]))));
 
+    // Pixel position of a moment on the strip, measured from the rendered
+    // blocks. A plain percentage ignores the 2px gaps between blocks and
+    // drifts up to ~12px by the right end, so labels and the marker would miss
+    // the block edges they belong to. Pixels go stale when the width changes,
+    // so measure() runs again on every width change (see layout below).
+    let geo = [];
+    let barWidth = 0;
+    const measure = () => {
+      const barLeft = bar.getBoundingClientRect().left;
+      barWidth = bar.clientWidth;
+      geo = Array.prototype.map.call(bar.children, (el, i) => {
+        const rect = el.getBoundingClientRect();
+        return { run: runs[i], left: rect.left - barLeft, width: rect.width };
+      });
+    };
+    const xOf = (ms) => {
+      const g = geo.find((b) => ms >= b.run.startMs && ms < b.run.endMs) || geo[geo.length - 1];
+      const f = (Math.min(ms, g.run.endMs) - g.run.startMs) / (g.run.endMs - g.run.startMs);
+      return g.left + f * g.width;
+    };
+
     let index = 0;
     const place = (i, animate) => {
       const hr = hours[i];
       const isNow = i === 0;
-      const f = frac(isNow ? now : hr.startMs);
+      const x = xOf(isNow ? now : hr.startMs);
       marker.classList.toggle('is-animated', !!animate);
       marker.classList.toggle('is-scrubbed', !isNow);
-      marker.classList.toggle('flip', f > 0.6);
-      marker.style.left = f * 100 + '%';
+      marker.classList.toggle('flip', x > barWidth * 0.6);
+      marker.style.left = x + 'px';
       tagSwatch.className = 'swatch tier-' + hr.tier;
       const when = isNow
         ? 'Now ' + clock(now)
@@ -427,10 +456,15 @@
       }, SCRUB_RETURN_MS);
     };
 
+    // The inverse of xOf: which hour is under the finger. A finger in the gap
+    // between two blocks counts as the first hour of the next block.
     const indexAt = (clientX) => {
-      const rect = bar.getBoundingClientRect();
-      const f = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 0.9999);
-      return Math.floor(f * hours.length);
+      const x = clientX - bar.getBoundingClientRect().left;
+      const g = geo.find((b) => x < b.left + b.width) || geo[geo.length - 1];
+      const f = Math.min(Math.max((x - g.left) / g.width, 0), 0.9999);
+      const t = g.run.startMs + f * (g.run.endMs - g.run.startMs);
+      const i = hours.findIndex((hr) => t >= hr.startMs && t < hr.endMs);
+      return i < 0 ? hours.length - 1 : i;
     };
 
     strip.addEventListener('pointerdown', (e) => {
@@ -463,17 +497,40 @@
       letGo();
     });
 
-    place(0, false);
+    // Everything that depends on block widths, in one place: words inside
+    // blocks, the times under them, the label rows and the marker. Runs right
+    // away (the strip is already in the page, so reading a width forces layout
+    // — waiting for an animation frame left labels stacked in background tabs)
+    // and again whenever the strip's width changes.
+    const layout = () => {
+      // Words first, measure after: a visible word must never be part of the
+      // widths that labels and the marker are placed from.
+      bar.querySelectorAll('.strip-run-label').forEach((el) => {
+        el.hidden = false;
+        el.hidden = el.getBoundingClientRect().width > el.parentElement.clientWidth - 6;
+      });
+      measure();
+      Array.prototype.forEach.call(labels.children, (el) => { el.dataset.px = String(xOf(Number(el.dataset.ms))); });
+      // The label area and the marker line grow with the number of rows used.
+      strip.style.setProperty('--label-rows', String(layoutLabels(labels)));
+      place(index, false);
+    };
+    layout();
 
-    // Words inside blocks and times under them are placed right away: the strip
-    // is already in the page, so reading a width forces layout. Waiting for an
-    // animation frame left every time stacked at the left edge in background
-    // tabs, where frames do not run.
-    bar.querySelectorAll('.strip-run-label').forEach((el) => {
-      el.hidden = el.getBoundingClientRect().width > el.parentElement.clientWidth - 6;
-    });
-    // The label area and the marker line grow with the number of rows used.
-    strip.style.setProperty('--label-rows', String(layoutLabels(labels)));
+    // A width change after drawing — rotating the phone, the browser toolbar
+    // resizing, fonts settling — would leave every pixel position stale. Only
+    // this strip is watched; the previous render's watcher is dropped.
+    if (stripObserver) stripObserver.disconnect();
+    stripObserver = null;
+    if (typeof ResizeObserver === 'function') {
+      let lastWidth = bar.clientWidth;
+      stripObserver = new ResizeObserver(() => {
+        if (bar.clientWidth === lastWidth) return;
+        lastWidth = bar.clientWidth;
+        layout();
+      });
+      stripObserver.observe(bar);
+    }
   }
 
   // ---- Footer --------------------------------------------------------------

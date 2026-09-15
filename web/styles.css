@@ -187,6 +187,12 @@ h2, p { margin: 0; }
   background: var(--surface);
 }
 .section-label { color: var(--ink-2); font-size: 0.875rem; font-weight: 550; }
+/* The strip is a grid child, and grid children refuse by default to be
+   narrower than their content. A long block word ("Expensive") that doesn't
+   fit would then stretch the whole strip (311px became 528px) and every
+   measured position with it. min-width: 0 lets the blocks keep their true
+   share of the width; words that don't fit are hidden instead. */
+#strip { min-width: 0; }
 .hint { font-weight: 400; }
 /* pan-y: a vertical swipe still scrolls the page; a sideways drag moves the marker. */
 .strip {
