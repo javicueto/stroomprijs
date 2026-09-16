@@ -21,8 +21,6 @@
     "minWindowHours": 2
   },
 
-  "pageUrl": "https://javicueto.github.io/stroomprijs/",
-
   "bestWindowHours": 3,
 
   "appliances": [
@@ -31,13 +29,5 @@
     { "id": "dryer",      "name": "Dryer",            "word": "dryer",           "kwh": 2.5,   "hours": 2, "shiftable": true },
     { "id": "laptop",     "name": "Laptop charge",    "word": "laptops",         "kwh": 0.05,  "hours": 2, "shiftable": false },
     { "id": "phone",      "name": "Phone charge",     "word": "phones",          "kwh": 0.015, "hours": 2, "shiftable": false }
-  ],
-
-  "calendar": {
-    "name": "⚡ Stroom",
-    "description": "Cheap, free and expensive electricity hours for tomorrow (Eneco Dynamisch). Written automatically every afternoon.",
-    "reminderMinutes": 30,
-    "runHours": [14, 15, 16],
-    "colors": { "free": "10", "cheap": "2", "expensive": "11", "best": "5" }
-  }
+  ]
 }

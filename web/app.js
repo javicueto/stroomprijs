@@ -3,7 +3,7 @@
  * is electricity cheap now, when is it cheap (or expensive) next, and tomorrow?
  *
  * Fetches, keeps a local copy, draws. Every price rule lives in shared/
- * (StroomCore, StroomText, StroomFeeds), the same code the calendar uses —
+ * (StroomCore, StroomText, StroomFeeds), the code the tests check —
  * never add price logic here.
  */
 (function () {

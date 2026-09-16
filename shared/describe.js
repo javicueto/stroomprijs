@@ -1,36 +1,13 @@
 /*
- * Stroom — the words for calendar events: titles and short descriptions.
- * Dutch word as a label, the information in English. Deliberately simple:
- * what to do and when — no prices.
+ * Stroom — date words for the page: "2026-09-15" → "Tue 15 Sep".
  *
  * Single source of truth — edit here in shared/ only.
  */
 var StroomText = (function () {
   'use strict';
 
-  function core() {
-    return typeof StroomCore !== 'undefined' ? StroomCore : require('./classify.js');
-  }
-
-  const KIND = {
-    free: { emoji: '🆓', nl: 'Gratis', en: 'Free power' },
-    cheap: { emoji: '🟢', nl: 'Goedkoop', en: 'Cheap' },
-    expensive: { emoji: '🔴', nl: 'Duur', en: 'Avoid' },
-    best: { emoji: '⭐', nl: 'Beste tijd', en: 'Best' },
-  };
   const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-  // A window ending exactly at the end of dateStr reads "24:00", not "00:00".
-  function timeLabel(ms, dateStr) {
-    const lp = core().localParts(ms);
-    if (lp.date !== dateStr && lp.hour === 0 && lp.minute === 0 && ms === core().dayRange(dateStr).end) return '24:00';
-    return core().pad(lp.hour) + ':' + core().pad(lp.minute);
-  }
-
-  function span(startMs, endMs, dateStr) {
-    return timeLabel(startMs, dateStr) + '–' + timeLabel(endMs, dateStr);
-  }
 
   function dayLabel(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number);
@@ -38,73 +15,7 @@ var StroomText = (function () {
     return WEEKDAYS[wd] + ' ' + d + ' ' + MONTHS[m - 1];
   }
 
-  function joinWords(words) {
-    return words.length < 2 ? words.join('') : words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1];
-  }
-
-  // "🟢 Goedkoop · Cheap 11:00–16:00" · "⭐ Beste tijd · Best 3h 03:00–06:00"
-  function title(kind, block, plan, config) {
-    const k = KIND[kind];
-    const name = kind === 'best' ? k.en + ' ' + config.bestWindowHours + 'h' : k.en;
-    return k.emoji + ' ' + k.nl + ' · ' + name + ' ' + span(block.startMs, block.endMs, plan.date);
-  }
-
-  function description(kind, block, plan, config) {
-    const words = joinWords(config.appliances.filter((a) => a.shiftable).map((a) => a.word));
-    const extras = joinWords(config.appliances.filter((a) => !a.shiftable).map((a) => a.word));
-    const start = timeLabel(block.startMs, plan.date);
-    const end = timeLabel(block.endMs, plan.date);
-    const n = config.bestWindowHours;
-    // The live page link goes first, so it shows without expanding the event on a phone.
-    const lines = config.pageUrl ? ['⚡ Now and tomorrow at a glance: ' + config.pageUrl, ''] : [];
-
-    if (kind === 'free') {
-      lines.push('Free power — good time for: ' + words + '.');
-      if (extras) lines.push('Also a good moment to charge ' + extras + ' and power banks.');
-    } else if (kind === 'cheap') {
-      lines.push('Good time for: ' + words + '.');
-    } else if (kind === 'expensive') {
-      lines.push('Avoid starting: ' + words + '.');
-      if (start === '00:00') lines.push('Wait until ' + end + '.');
-      else if (end === '24:00') lines.push('Start before ' + start + '.');
-      else lines.push('Start before ' + start + ', or wait until ' + end + '.');
-      if (plan.best) lines.push('Cheapest ' + n + ' hours that day: ' + span(plan.best.startMs, plan.best.endMs, plan.date) + '.');
-    } else if (kind === 'best') {
-      lines.push(plan.stats.flat ? 'Prices are close all day, so timing matters little.' : 'No clearly cheap hours that day.');
-      lines.push('These are the cheapest ' + n + ' hours: good for ' + words + '.');
-    }
-    return lines.join('\n');
-  }
-
-  function eventsForPlan(plan, config) {
-    const events = plan.windows.map((w) => ({
-      kind: w.tier,
-      startMs: w.startMs,
-      endMs: w.endMs,
-      title: title(w.tier, w, plan, config),
-      description: description(w.tier, w, plan, config),
-    }));
-    if (plan.showBest) {
-      events.push({
-        kind: 'best',
-        startMs: plan.best.startMs,
-        endMs: plan.best.endMs,
-        title: title('best', plan.best, plan, config),
-        description: description('best', plan.best, plan, config),
-      });
-    }
-    return events.sort((a, b) => a.startMs - b.startMs);
-  }
-
-  const api = {
-    KIND: KIND,
-    timeLabel: timeLabel,
-    span: span,
-    dayLabel: dayLabel,
-    title: title,
-    description: description,
-    eventsForPlan: eventsForPlan,
-  };
+  const api = { dayLabel: dayLabel };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   return api;
 })();

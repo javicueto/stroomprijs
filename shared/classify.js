@@ -2,9 +2,9 @@
  * Stroom — shared price logic: Amsterdam time, the Eneco price formula,
  * tiers, windows and best start times.
  *
- * Single source of truth. Runs unchanged in Google Apps Script (V8), the
- * browser and Node. Edit it here in shared/ only — scripts/sync_shared.sh
- * copies it into apps-script/ and web/shared/.
+ * Single source of truth. Runs unchanged in the browser and in Node (tests).
+ * Edit it here in shared/ only — scripts/sync_shared.sh copies it into
+ * web/shared/.
  */
 var StroomCore = (function () {
   'use strict';

@@ -1,7 +1,7 @@
 /*
  * Stroom — price feeds. Builds requests and parses responses; the actual
- * HTTP call is passed in, because Apps Script (UrlFetchApp, synchronous) and
- * the browser (fetch, asynchronous) do it differently.
+ * HTTP call is passed in: the page uses fetch (asynchronous, loadDay) and the
+ * tests replay saved responses (synchronous, loadDaySync).
  *
  * Both feeds are public, need no login and return the EPEX day-ahead price
  * excluding VAT. The Eneco formula is applied afterwards in StroomCore.

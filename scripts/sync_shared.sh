@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Copies the shared logic and config into both runtimes:
-#   apps-script/  — the calendar job (also gets the private settings)
-#   web/shared/   — the web page (never gets the private settings)
+# Copies the shared logic and config into the web page (web/shared/).
 #
 # The copies are GENERATED. Line 2 of each records a hash of its body, and the
 # sync refuses to overwrite a copy whose body no longer matches: that means
@@ -49,15 +47,7 @@ as_js() {
   ' "$json" "$global" > "$out"
 }
 
-[ -f "$ROOT/config/private.json" ] || { echo "Missing config/private.json (share list + alert email)." >&2; exit 1; }
-
 as_js "$ROOT/config/tariff.json" STROOM_CONFIG "$TMP/config.js"
-as_js "$ROOT/config/private.json" STROOM_PRIVATE "$TMP/private-config.js"
-
-echo "apps-script/"
-for f in classify.js describe.js fetch-prices.js; do emit "$ROOT/apps-script/$f" "$ROOT/shared/$f"; done
-emit "$ROOT/apps-script/config.js" "$TMP/config.js"
-emit "$ROOT/apps-script/private-config.js" "$TMP/private-config.js"
 
 echo "web/shared/"
 for f in classify.js describe.js fetch-prices.js; do emit "$ROOT/web/shared/$f" "$ROOT/shared/$f"; done
